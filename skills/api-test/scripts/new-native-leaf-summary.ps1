@@ -55,5 +55,9 @@ $summary=[ordered]@{
 $json=$summary | ConvertTo-Json -Depth 100
 if(!(Test-Json -Json $json -SchemaFile (Join-Path $references 'native-leaf-summary.schema.json') -ErrorAction Stop)){ throw 'Generated native leaf summary does not conform to schema.' }
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
-[IO.File]::WriteAllText($summaryPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+$temp="$summaryPath.tmp-$([Guid]::NewGuid().ToString('N'))"
+try {
+    [IO.File]::WriteAllText($temp, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temp -Destination $summaryPath
+} finally { if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force} }
 [pscustomobject]@{ summaryPath=$summaryPath; summarySha256=Get-Hash $summaryPath; verdict=$verdict } | ConvertTo-Json

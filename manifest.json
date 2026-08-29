@@ -11,10 +11,10 @@
     },
     {
       "name": "api-test",
-      "version": "0.1.0-rc.2",
+      "version": "0.2.0-rc.1",
       "path": "skills/api-test",
       "entrypoint": "SKILL.md",
-      "contentSha256": "7ae242f941ec73f7ebaeb5315d5003cc82a035a399e519d0bfe424042267a6e9"
+      "contentSha256": "36e8de609b711e7215efc52c5c9ec0676a204b44f0cb8f89b1d38c365965e77f"
     }
   ]
 }

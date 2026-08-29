@@ -80,7 +80,7 @@ foreach ($sid in $selected) {
 }
 
 $verdict = if ($blockers.Count -gt 0 -or $unresolved -gt 0 -or @($scenarioResults | Where-Object verdict -eq 'BLOCKED').Count -gt 0) {'BLOCKED'} elseif ($failed -gt 0) {'FAIL'} else {'PASS'}
-$outcome = if ($verdict -eq 'BLOCKED') {'BLOCKED'} elseif ($verdict -eq 'FAIL') { if ([string]$request.run.mode -eq 'FIX_VERIFICATION') {'REGRESSION_FOUND'} else {'DEFECT_FOUND'} } elseif ([string]$request.run.mode -eq 'FIX_VERIFICATION') {'FIX_VERIFIED'} else {'NO_DEFECT'}
+$outcome = if ($verdict -eq 'BLOCKED') {'BLOCKED'} elseif ($verdict -eq 'FAIL') { if ([string]$request.run.mode -eq 'FIX_VERIFICATION') {'REGRESSION_FOUND'} elseif ([string]$request.run.mode -eq 'DEFECT_REPRODUCTION') {'DEFECT_REPRODUCED'} else {'DEFECT_FOUND'} } elseif ([string]$request.run.mode -eq 'FIX_VERIFICATION') {'FIX_VERIFIED'} else {'NO_DEFECT'}
 $closure = if ($verdict -eq 'BLOCKED') {'BLOCKED'} elseif ($verdict -eq 'FAIL') {'OPEN'} elseif ([string]$request.run.mode -eq 'FIX_VERIFICATION') {'CLOSED'} else {'NOT_APPLICABLE'}
 $freshClass = if ($hasRuntime -and $hasMutation) {'MIXED'} elseif ($hasMutation) {'LIVE_MUTABLE'} elseif ($hasRuntime) {'RUNTIME_BOUND'} else {'DETERMINISTIC'}
 $issued = [DateTimeOffset]::UtcNow

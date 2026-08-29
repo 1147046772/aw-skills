@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory)][string]$WorkspaceRoot,
     [Parameter(Mandatory)][string]$ContractId,
-    [Parameter(Mandatory)][ValidateSet('openapi','graphql','grpc','websocket','custom')][string]$Format,
+    [Parameter(Mandatory)][ValidateSet('custom')][string]$Format,
     [Parameter(Mandatory)][string]$RootPath,
     [Parameter(Mandatory)][string[]]$FilePath,
     [Parameter(Mandatory)][string]$OutputPath
@@ -64,9 +64,19 @@ $manifest = [ordered]@{
     externalRefs = @()
     transitiveLocalRefsResolved = $true
     combinedSha256 = Get-StringHash $lines
+    producer = [ordered]@{
+        kind = 'CUSTOM_EXPLICIT'
+        id = 'api-test.custom-explicit.v1'
+        sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
 }
 
 $parent = Split-Path -Parent $output
 if (!(Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }
-$manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $output -Encoding utf8NoBOM
+$temp = "$output.tmp-$([Guid]::NewGuid().ToString('N'))"
+try {
+    $json = $manifest | ConvertTo-Json -Depth 20
+    [IO.File]::WriteAllText($temp, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temp -Destination $output
+} finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force } }
 [pscustomobject]@{ manifestPath=$output; manifestSha256=(Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant(); combinedSha256=$manifest.combinedSha256 } | ConvertTo-Json

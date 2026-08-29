@@ -82,6 +82,94 @@ function Resolve-WorkspaceRoot([string]$AdapterDirectory,[string]$Relative) {
     if($null -eq (Resolve-Portable $full $relativeAdapter 'adapter workspace path chain')){ return $null }
     $full
 }
+function Test-UniqueIds($Values,[string]$Label){
+    $ids=@($Values | ForEach-Object { [string]$_.id })
+    if($ids.Count -ne @($ids | Sort-Object -Unique -CaseSensitive).Count){ Add-Error "$Label IDs are not unique" }
+}
+function Test-RunnerTemplate($Runner,[string]$Workspace){
+    $allowed=@('{workspace}','{requestPath}','{scenarioPath}','{evidencePath}','{artifactRoot}')
+    foreach($arg in @($Runner.argvTemplate)){
+        $text=[string]$arg
+        if(($text.Contains('{') -or $text.Contains('}')) -and $text -cnotin $allowed){ Add-Error "runner '$($Runner.id)' contains an unknown or embedded token: $text" }
+    }
+    $exe=[IO.Path]::GetFileNameWithoutExtension([string]$Runner.argvTemplate[0]).ToLowerInvariant()
+    $tail=@($Runner.argvTemplate | Select-Object -Skip 1 | ForEach-Object { ([string]$_).ToLowerInvariant() })
+    if(($exe -in @('pwsh','powershell') -and @($tail | Where-Object { $_ -in @('-command','-c') }).Count -gt 0) -or
+       ($exe -eq 'cmd' -and @($tail | Where-Object { $_ -in @('/c','/k') }).Count -gt 0) -or
+       ($exe -in @('sh','bash','zsh') -and @($tail | Where-Object { $_ -eq '-c' }).Count -gt 0)){
+        Add-Error "runner '$($Runner.id)' uses a shell command mode"
+    }
+    $null=Resolve-Portable $Workspace ([string]$Runner.cwd) "runner '$($Runner.id)' cwd"
+}
+function Test-DestinationObservation($Observed,$Destination,[string]$Label){
+    if($null -eq $Observed -or $null -eq $Destination){ return }
+    foreach($pair in @(
+        @('observedScheme',$Destination.scheme),@('observedHost',$Destination.host),@('observedPort',$Destination.port),@('observedBasePath',$Destination.basePath),
+        @('finalObservedScheme',$Destination.scheme),@('finalObservedHost',$Destination.host),@('finalObservedPort',$Destination.port),@('finalObservedBasePath',$Destination.basePath),
+        @('networkScope',$Destination.networkScope),@('observationProviderId',$Destination.observation.providerId),@('observationCommandHash',$Destination.observation.commandHash)
+    )){ if([string]$Observed.($pair[0]) -cne [string]$pair[1]){ Add-Error "$Label $($pair[0]) does not match the approved destination" } }
+    if([bool]$Observed.proxyUsed -or @($Observed.redirectChain).Count -ne 0){ Add-Error "$Label used a proxy or redirect" }
+    if([string]$Destination.scheme -eq 'http' -and $null -ne $Observed.tlsPeerFingerprint){ Add-Error "$Label reports a TLS peer for an HTTP destination" }
+}
+function Test-OpenApiPointer($Document,[string]$Fragment,[string]$RefText){
+    if([string]::IsNullOrEmpty($Fragment)){return}
+    $decoded=[Uri]::UnescapeDataString($Fragment)
+    if(!$decoded.StartsWith('/')){Add-Error "OpenAPI ref uses an unsupported fragment: $RefText";return}
+    $cursor=$Document
+    foreach($raw in $decoded.Substring(1).Split('/')){
+        $part=$raw.Replace('~1','/').Replace('~0','~')
+        if($cursor -is [Collections.IDictionary] -and $cursor.Contains($part)){$cursor=$cursor[$part]}
+        elseif($cursor -is [Collections.IList] -and $part -match '^(0|[1-9][0-9]*)$' -and [int]$part -lt $cursor.Count){$cursor=$cursor[[int]$part]}
+        else{Add-Error "OpenAPI ref has an unresolved JSON Pointer: $RefText";return}
+    }
+}
+function Get-OpenApiTruth([string]$RootFile,[string]$Workspace){
+    $docs=@{}; $queue=[Collections.Generic.Queue[string]]::new(); $queue.Enqueue($RootFile)
+    while($queue.Count -gt 0){
+        $current=$queue.Dequeue(); if($docs.ContainsKey($current)){continue}
+        try{$doc=Get-Content -LiteralPath $current -Raw|ConvertFrom-Json -AsHashtable -Depth 100}catch{Add-Error "OpenAPI JSON is unreadable: $current";return $null}
+        $docs[$current]=$doc
+        $refs=[Collections.Generic.List[string]]::new()
+        function Visit-OpenApiNode($node){
+            if($node -is [Collections.IDictionary]){foreach($k in $node.Keys){if([string]$k -ceq '$ref'){$refs.Add([string]$node[$k])}else{Visit-OpenApiNode $node[$k]}}}
+            elseif($node -is [Collections.IEnumerable] -and $node -isnot [string]){foreach($item in $node){Visit-OpenApiNode $item}}
+        }
+        Visit-OpenApiNode $doc
+        foreach($refText in $refs){
+            if($refText -match '^[A-Za-z][A-Za-z0-9+.-]*:' -or $refText.StartsWith('//')){Add-Error "OpenAPI external ref is forbidden: $refText";continue}
+            $refParts=$refText.Split('#',2);$filePart=[Uri]::UnescapeDataString($refParts[0]);$fragment=if($refParts.Count -eq 2){$refParts[1]}else{''}
+            if([string]::IsNullOrEmpty($filePart)){$physical=$current}else{
+                if([IO.Path]::IsPathRooted($filePart)){Add-Error "OpenAPI absolute ref is forbidden: $refText";continue}
+                $candidate=[IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $current) ($filePart -replace '/',[IO.Path]::DirectorySeparatorChar)))
+                if(!(Is-Under $candidate $Workspace) -or !(Test-Path -LiteralPath $candidate -PathType Leaf)){Add-Error "OpenAPI ref is missing or escapes workspace: $refText";continue}
+                $physical=(Resolve-Path -LiteralPath $candidate).ProviderPath
+                if(!(Is-Under $physical $Workspace)){Add-Error "OpenAPI ref physically escapes workspace: $refText";continue}
+                if([IO.Path]::GetExtension($physical) -cne '.json'){Add-Error "OpenAPI non-JSON ref is unsupported: $refText";continue}
+            }
+            try{$targetDoc=if($docs.ContainsKey($physical)){$docs[$physical]}else{Get-Content -LiteralPath $physical -Raw|ConvertFrom-Json -AsHashtable -Depth 100}}catch{Add-Error "OpenAPI referenced JSON is unreadable: $refText";continue}
+            Test-OpenApiPointer $targetDoc $fragment $refText
+            if(!$docs.ContainsKey($physical)){$queue.Enqueue($physical)}
+        }
+    }
+    $root=$docs[$RootFile]
+    if($null -eq $root -or !$root.Contains('openapi') -or [string]$root['openapi'] -notmatch '^3\.(0|1)\.' -or !$root.Contains('paths')){Add-Error 'OpenAPI root is not supported 3.0/3.1 JSON';return $null}
+    $ops=@();$ids=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($path in $root['paths'].Keys){
+        $item=$root['paths'][$path]
+        if($item.Contains('$ref')){Add-Error "OpenAPI referenced path item is unsupported: $path";continue}
+        foreach($method in @('get','head','options','post','put','patch','delete')){
+            if(!$item.Contains($method)){continue}
+            $op=$item[$method];$id=[string]$op['operationId']
+            if([string]::IsNullOrWhiteSpace($id)){Add-Error "OpenAPI operationId is missing: $method $path";continue}
+            if(!$ids.Add($id)){Add-Error "OpenAPI operationId is duplicated: $id";continue}
+            $external=$false;if($op.Contains('x-api-test-external')){$external=[bool]$op['x-api-test-external']}
+            $trace=@();if($op.Contains('x-api-test-traceability')){$v=$op['x-api-test-traceability'];if($v -is [string]){$trace=@([string]$v)}else{$trace=@($v|ForEach-Object{[string]$_})}}
+            $ops+=@{id=$id;method=$method.ToUpperInvariant();pathOrOperation=[string]$path;effect=if($method -in @('get','head','options')){'READ'}else{'WRITE'};external=$external;traceabilityKeys=@($trace|Sort-Object -Unique -CaseSensitive)}
+        }
+    }
+    [pscustomobject]@{Files=@($docs.Keys|ForEach-Object{[IO.Path]::GetRelativePath($Workspace,$_).Replace('\','/')}|Sort-Object -Unique -CaseSensitive);Operations=$ops}
+}
+function Get-OperationSignatures($Operations){@($Operations|ForEach-Object{"$($_.id)|$($_.method)|$($_.pathOrOperation)|$($_.effect)|$(([bool]$_.external).ToString().ToLowerInvariant())|$(@($_.traceabilityKeys|Sort-Object -Unique -CaseSensitive)-join ',')"}|Sort-Object -CaseSensitive)}
 function Get-DestinationFingerprint($Destination) {
     $line='{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}|{8}|{9}|{10}' -f $Destination.id,$Destination.serviceId,$Destination.scheme,$Destination.host,$Destination.port,$Destination.basePath,$Destination.environmentClass,$Destination.networkScope,([bool]$Destination.allowRedirects).ToString().ToLowerInvariant(),([bool]$Destination.external).ToString().ToLowerInvariant(),([bool]$Destination.production).ToString().ToLowerInvariant()
     Get-StringHash ($line+"`n")
@@ -94,6 +182,7 @@ function Compare-Attestation($Attestation,$Request,[string]$Label,$InitialAttest
     if($null -eq $Attestation){ return }
     if([string]$Attestation.candidate.revision -ne [string]$Request.candidate.revision -or [string]$Attestation.candidate.sourceHash -ne [string]$Request.candidate.sourceHash -or [string]$Attestation.candidate.diffHash -ne [string]$Request.candidate.diffHash -or [string]$Attestation.candidate.buildId -ne [string]$Request.candidate.buildId){ Add-Error "$Label candidate identity drifted" }
     if([string]$Attestation.destination.id -ne [string]$Request.environment.destinationId -or [string]$Attestation.destination.serviceId -ne [string]$Request.environment.serviceId -or [string]$Attestation.destination.fingerprint -ne [string]$Request.environment.destinationFingerprint){ Add-Error "$Label destination identity drifted" }
+    Test-DestinationObservation $Attestation.destination $script:destination $Label
     if([string]$Attestation.service.serviceId -ne [string]$Request.environment.serviceId -or [string]$Attestation.service.identityHash -ne [string]$Request.environment.serviceIdentityHash){ Add-Error "$Label service identity drifted" }
     if([string]$Attestation.contract.contractId -ne [string]$Request.environment.contractId -or [string]$Attestation.contract.manifestHash -ne [string]$Request.environment.contractManifestHash -or [string]$Attestation.contract.combinedSha256 -ne [string]$Request.environment.contractCombinedSha256 -or [string]$Attestation.contract.operationIndexHash -ne [string]$Request.environment.operationIndexHash){ Add-Error "$Label contract identity drifted" }
     if([string]$Attestation.authProfileFingerprint -ne [string]$Request.environment.authProfileFingerprint){ Add-Error "$Label authentication profile drifted" }
@@ -116,6 +205,8 @@ if(!(Is-Under $adapterFull $workspace) -or !(Is-Under $requestFull $workspace)){
 $adapterHash=Get-Hash $adapterFull
 $requestHash=Get-Hash $requestFull
 if([string]$request.projectAdapter.sha256 -ne $adapterHash -or [string]$request.projectAdapter.adapterId -ne [string]$adapter.adapterId -or [string]$request.projectAdapter.adapterVersion -ne [string]$adapter.adapterVersion){ Add-Error 'request adapter identity mismatch' }
+Test-UniqueIds $adapter.runners 'runner'
+foreach($declaredRunner in $adapter.runners){ Test-RunnerTemplate $declaredRunner $workspace }
 
 $destinationIds=@($adapter.destinations | ForEach-Object { [string]$_.id })
 if($destinationIds.Count -ne @($destinationIds | Sort-Object -Unique -CaseSensitive).Count){ Add-Error 'destination IDs are not unique' }
@@ -133,9 +224,10 @@ if($destination.Count -ne 1){ Add-Error 'request destination is not uniquely dec
 $contractIds=@($adapter.contracts | ForEach-Object { [string]$_.id })
 if($contractIds.Count -ne @($contractIds | Sort-Object -Unique -CaseSensitive).Count){ Add-Error 'contract IDs are not unique' }
 $contract=@($adapter.contracts | Where-Object { [string]$_.id -eq [string]$request.environment.contractId })
-$operationByKey=@{}; $allOperationIds=@()
+$operationByKey=@{}; $allOperationIds=@(); $manifest=$null; $index=$null; $openApiTruth=$null
 if($contract.Count -ne 1){ Add-Error 'request contract is not uniquely declared by adapter' } else {
     $contract=$contract[0]
+    if([string]$contract.format -in @('graphql','grpc','websocket')){Add-Error "BLOCKED_UNSUPPORTED contract format in stable release: $($contract.format)"}
     if([string]$contract.serviceId -ne [string]$request.environment.serviceId){ Add-Error 'contract service does not match request service' }
     $manifestPath=Resolve-Portable $workspace ([string]$contract.manifest.path) 'contract manifest'
     $indexPath=Resolve-Portable $workspace ([string]$contract.operationIndex.path) 'operation index'
@@ -146,13 +238,23 @@ if($contract.Count -ne 1){ Add-Error 'request contract is not uniquely declared 
             if([string]$manifest.contractId -ne [string]$contract.id -or [string]$manifest.format -ne [string]$contract.format){ Add-Error 'contract manifest identity mismatch' }
             $manifestPaths=@($manifest.files | ForEach-Object { [string]$_.path })
             if($manifestPaths.Count -ne @($manifestPaths | Sort-Object -Unique -CaseSensitive).Count){ Add-Error 'contract manifest contains duplicate paths' }
+            $rootEntries=@($manifest.files | Where-Object role -eq 'ROOT')
+            if($rootEntries.Count -ne 1 -or ($rootEntries.Count -eq 1 -and [string]$rootEntries[0].path -cne [string]$manifest.root)){ Add-Error 'contract manifest root entry is not exact' }
             $lines=''
             foreach($entry in @($manifest.files | Sort-Object path -CaseSensitive)){
                 $file=Resolve-Portable $workspace ([string]$entry.path) "contract file '$($entry.path)'"
                 if($file -and (Get-Hash $file) -ne [string]$entry.sha256){ Add-Error "contract file hash mismatch: $($entry.path)" }
                 $lines += "$($entry.path)`t$($entry.sha256)`n"
             }
-            if((Get-StringHash $lines) -ne [string]$manifest.combinedSha256 -or [string]$manifest.combinedSha256 -ne [string]$request.environment.contractCombinedSha256){ Add-Error 'contract combined hash mismatch' }
+            $actualCombinedSha256 = Get-StringHash $lines
+            if($actualCombinedSha256 -ne [string]$manifest.combinedSha256 -or [string]$manifest.combinedSha256 -ne [string]$request.environment.contractCombinedSha256){
+                Add-Error "contract combined hash mismatch (actual=$actualCombinedSha256 manifest=$($manifest.combinedSha256) request=$($request.environment.contractCombinedSha256))"
+            }
+            if([string]$contract.format -eq 'openapi'){
+                if([string]$manifest.producer.kind -ne 'OPENAPI_JSON_COMPILER'){ Add-Error 'OpenAPI manifest is not compiler-produced' }
+                $rootFile=Resolve-Portable $workspace ([string]$manifest.root) 'OpenAPI root'
+                if($rootFile){$openApiTruth=Get-OpenApiTruth $rootFile $workspace;if($openApiTruth -and !(Set-Equal @($openApiTruth.Files) $manifestPaths)){Add-Error 'OpenAPI transitive local-reference file set does not match manifest'}}
+            }
         }
     }
     if($indexPath){
@@ -160,12 +262,14 @@ if($contract.Count -ne 1){ Add-Error 'request contract is not uniquely declared 
         $index=Read-Json $indexPath 'operation index'; $null=Test-Schema $index 'operation-index.schema.json' 'operation index'
         if($index){
             if([string]$index.contractId -ne [string]$contract.id -or [string]$index.serviceId -ne [string]$contract.serviceId -or [string]$index.contractCombinedSha256 -ne [string]$request.environment.contractCombinedSha256){ Add-Error 'operation index identity mismatch' }
+            if([string]$contract.format -eq 'openapi' -and ([string]$index.producer.kind -ne 'OPENAPI_JSON_COMPILER' -or [string]$index.producer.id -cne [string]$manifest.producer.id -or [string]$index.producer.sha256 -cne [string]$manifest.producer.sha256)){ Add-Error 'OpenAPI manifest and Operation index producer identity mismatch' }
             foreach($op in $index.operations){
                 $key="$($contract.id)|$($op.id)"
                 if($operationByKey.ContainsKey($key)){ Add-Error "duplicate operation ID: $($op.id)" } else { $operationByKey[$key]=$op; $allOperationIds += [string]$op.id }
                 $derived=if([string]$op.method -in @('GET','HEAD','OPTIONS','QUERY')){'READ'}elseif([string]$op.method -in @('POST','PUT','PATCH','DELETE','MUTATION')){'WRITE'}else{$null}
                 if($null -ne $derived -and [string]$op.effect -ne $derived){ Add-Error "operation effect contradicts method: $($op.id)" }
             }
+            if([string]$contract.format -eq 'openapi' -and $openApiTruth -and !(Set-Equal (Get-OperationSignatures $index.operations) (Get-OperationSignatures $openApiTruth.Operations))){ Add-Error 'Operation index does not exactly match OpenAPI contract truth' }
         }
     }
     if($null -ne $contract.traceability){
@@ -176,8 +280,15 @@ if($contract.Count -ne 1){ Add-Error 'request contract is not uniquely declared 
             if($trace){
                 if([string]$trace.contractId -ne [string]$contract.id -or [string]$trace.serviceId -ne [string]$contract.serviceId){ Add-Error 'traceability identity mismatch' }
                 foreach($mapping in $trace.mappings){ foreach($oid in $mapping.apiOperationIds){ if([string]$oid -notin $allOperationIds){ Add-Error "traceability references unknown operation: $oid" } } }
+                if($index){
+                    $declaredTracePairs=@($trace.mappings|ForEach-Object{$business=[string]$_.businessOperationId;@($_.apiOperationIds)|ForEach-Object{"$business|$([string]$_)"}})
+                    $indexedTracePairs=@($index.operations|ForEach-Object{$operationId=[string]$_.id;@($_.traceabilityKeys)|ForEach-Object{"$([string]$_)|$operationId"}})
+                    if(!(Set-Equal $declaredTracePairs $indexedTracePairs)){Add-Error 'Operation index traceability does not exactly match traceability contract'}
+                }
             }
         }
+    } elseif($index -and @($index.operations|ForEach-Object{$_.traceabilityKeys}|Where-Object{!([string]::IsNullOrWhiteSpace([string]$_))}).Count -gt 0){
+        Add-Error 'Operation index declares traceability keys but adapter has no traceability contract'
     }
 }
 
@@ -205,6 +316,7 @@ if($catalogPath){
     if($catalog){
         $catalogIds=@($catalog.scenarios | ForEach-Object { [string]$_.id })
         if($catalogIds.Count -ne @($catalogIds | Sort-Object -Unique -CaseSensitive).Count){ Add-Error 'catalog scenario IDs are not unique' }
+        foreach($relation in $catalog.relations){if([string]$relation.from -notin $catalogIds -or [string]$relation.to -notin $catalogIds){Add-Error "catalog relation references an unknown scenario: $($relation.from)->$($relation.to)"}}
         foreach($entry in $catalog.scenarios){
             $scenarioPath=Resolve-Portable $workspace ([string]$entry.path) "scenario '$($entry.id)'"
             if(!$scenarioPath){ continue }
@@ -214,7 +326,14 @@ if($catalogPath){
             if([string]$scenario.id -ne [string]$entry.id){ Add-Error "scenario ID mismatch: $($entry.id)" }
             $scenarioById[[string]$entry.id]=$scenario; $scenarioPathById[[string]$entry.id]=$scenarioPath
             $runner=@($adapter.runners | Where-Object { [string]$_.id -eq [string]$scenario.runtime.runnerId })
-            if($runner.Count -ne 1){ Add-Error "scenario runner is not uniquely declared: $($entry.id)" } elseif([string]$scenario.protocol -notin @($runner[0].protocols) -or [string]$scenario.testType -notin @($runner[0].testTypes)){ Add-Error "runner is incompatible: $($entry.id)" }
+            if($runner.Count -ne 1){ Add-Error "scenario runner is not uniquely declared: $($entry.id)" } else {
+                if([string]$scenario.protocol -notin @($runner[0].protocols) -or [string]$scenario.testType -notin @($runner[0].testTypes)){ Add-Error "runner is incompatible: $($entry.id)" }
+                if(@($scenario.runtime.capabilities | Where-Object { [string]$_ -notin @($runner[0].capabilities) }).Count -gt 0){ Add-Error "runner lacks a required scenario capability: $($entry.id)" }
+            }
+            Test-UniqueIds $scenario.preconditions "scenario '$($entry.id)' precondition"
+            Test-UniqueIds $scenario.steps "scenario '$($entry.id)' step"
+            Test-UniqueIds $scenario.assertions "scenario '$($entry.id)' assertion"
+            Test-UniqueIds $scenario.stopConditions "scenario '$($entry.id)' stop condition"
             $scenarioOperationIds=@($scenario.operations | ForEach-Object { [string]$_.id })
             if($scenarioOperationIds.Count -ne @($scenarioOperationIds | Sort-Object -Unique -CaseSensitive).Count){ Add-Error "scenario operation IDs are not unique: $($entry.id)" }
             $opForScenario=@{}
@@ -243,6 +362,7 @@ if($catalogPath){
                 if(!$usedPermissions[$permission] -and [bool]$scenario.permissions.$permission){ Add-Error "scenario declares unused mutation permission: $($entry.id)/$permission" }
             }
             $hasMutation=@($usedPermissions.Values | Where-Object { $_ }).Count -gt 0
+            if($hasMutation -and $runner.Count -eq 1 -and [string]$runner[0].mutationClass -eq 'NONE'){ Add-Error "mutation scenario uses a read-only runner: $($entry.id)" }
             if($hasMutation -and $null -eq $scenario.writePolicy){ Add-Error "mutation scenario lacks write policy: $($entry.id)" }
             if(($usedPermissions.businessWrite -or $usedPermissions.testDataMutation) -and ([string]$scenario.fixture.mode -eq 'none' -or ![bool]$scenario.fixture.ownsData)){ Add-Error "data mutation lacks owned fixture: $($entry.id)" }
             foreach($permission in @('businessWrite','testDataMutation','externalCall','productionAccess','accountOrCredentialChange')){ if([bool]$scenario.permissions.$permission -and ![bool]$request.authorization.$permission){ Add-Error "scenario permission exceeds request: $($entry.id)/$permission" } }
@@ -275,12 +395,16 @@ foreach($ep in $EvidencePath){
     $ev=Read-Json $full 'scenario evidence'; $null=Test-Schema $ev 'evidence.schema.json' 'scenario evidence'
     if(!$ev){continue}; if(Has-SecretMaterial $full){ Add-Error 'scenario evidence contains secret-like material' }
     $sid=[string]$ev.scope.scenarioId
+    $expectedEvidence=if($outputRoot){[IO.Path]::GetFullPath((Join-Path (Join-Path $outputRoot $sid) ([string]$request.output.evidenceFileName)))}else{$null}
+    if($null -eq $expectedEvidence -or !$full.Equals($expectedEvidence,$pathComparison)){ Add-Error "evidence path is not canonical: $sid" }
     if($evidenceByScenario.ContainsKey($sid)){ Add-Error "duplicate evidence: $sid" }else{$evidenceByScenario[$sid]=@{value=$ev;path=$full}}
     if($sid -notin @($request.testPlan.selectedScenarioIds) -or !$scenarioById.ContainsKey($sid)){ Add-Error "evidence outside selected boundary: $sid"; continue }
     if([string]$ev.requestId -ne [string]$request.requestId -or [string]$ev.scope.requestHash -ne $requestHash){ Add-Error "evidence request identity mismatch: $sid" }
     if([string]$ev.scope.projectAdapterHash -ne $adapterHash -or [string]$ev.scope.catalogHash -ne (Get-Hash $catalogPath) -or [string]$ev.scope.scenarioHash -ne (Get-Hash $scenarioPathById[$sid])){ Add-Error "evidence input hash mismatch: $sid" }
     foreach($pair in @(@('candidateSourceHash',$request.candidate.sourceHash),@('serviceIdentityHash',$request.environment.serviceIdentityHash),@('destinationFingerprint',$request.environment.destinationFingerprint),@('contractManifestHash',$request.environment.contractManifestHash),@('contractCombinedSha256',$request.environment.contractCombinedSha256),@('operationIndexHash',$request.environment.operationIndexHash),@('attestationHash',$request.currentAttestation.sha256))){ if([string]$ev.scope.($pair[0]) -ne [string]$pair[1]){ Add-Error "evidence $($pair[0]) mismatch: $sid" } }
     if([string]$ev.runtime.destinationId -ne [string]$request.environment.destinationId -or [string]$ev.runtime.destinationFingerprint -ne [string]$request.environment.destinationFingerprint -or [string]$ev.runtime.finalDestinationFingerprint -ne [string]$request.environment.destinationFingerprint -or [bool]$ev.runtime.redirected){ Add-Error "runtime destination mismatch or redirect: $sid" }
+    Test-DestinationObservation $ev.runtime $destination "evidence runtime '$sid'"
+    if($initialAttestation -and ([string]$ev.runtime.observationProviderId -cne [string]$initialAttestation.destination.observationProviderId -or [string]$ev.runtime.observationCommandHash -cne [string]$initialAttestation.destination.observationCommandHash -or !(Set-Equal @($ev.runtime.resolvedAddresses) @($initialAttestation.destination.resolvedAddresses)))){ Add-Error "evidence destination observation differs from attestation: $sid" }
     if([string]$ev.runtime.attestationHash -ne [string]$request.currentAttestation.sha256 -or [string]$ev.runtime.serviceIdentityHash -ne [string]$request.environment.serviceIdentityHash -or [string]$ev.runtime.authProfileFingerprint -ne [string]$request.environment.authProfileFingerprint){ Add-Error "runtime identity mismatch: $sid" }
     if($null -ne $ev.runtime.imageRef -and ([string]$ev.runtime.imageId -ne [string]$ev.runtime.containerImageId -or $null -eq $ev.runtime.containerId)){ Add-Error "Docker runtime identity is incomplete or mismatched: $sid" }
     $scenario=$scenarioById[$sid]; $allowed=@($scenario.operations | ForEach-Object { [string]$_.id })
@@ -312,10 +436,44 @@ if($ReceiptPath){
         if([string]$receipt.input.requestSha256 -ne $requestHash -or [string]$receipt.input.projectAdapterSha256 -ne $adapterHash -or [string]$receipt.input.catalogSha256 -ne (Get-Hash $catalogPath)){ Add-Error 'receipt input identity mismatch' }
         foreach($pair in @(@('candidateSourceHash',$request.candidate.sourceHash),@('serviceIdentityHash',$request.environment.serviceIdentityHash),@('destinationFingerprint',$request.environment.destinationFingerprint),@('contractManifestHash',$request.environment.contractManifestHash),@('contractCombinedSha256',$request.environment.contractCombinedSha256),@('operationIndexHash',$request.environment.operationIndexHash),@('attestationHash',$request.currentAttestation.sha256))){ if([string]$receipt.subject.($pair[0]) -ne [string]$pair[1]){ Add-Error "receipt $($pair[0]) mismatch" } }
         if(!(Set-Equal @($receipt.selection.selectedScenarioIds) @($request.testPlan.selectedScenarioIds)) -or !(Set-Equal @($receipt.selection.executedScenarioIds) @($evidenceByScenario.Keys))){ Add-Error 'receipt selected or executed boundary mismatch' }
-        $required=0;$passed=0;$failed=0;$blocked=0;$unresolved=0;$blockerCount=0
-        foreach($sid in $evidenceByScenario.Keys){$ev=$evidenceByScenario[$sid].value;foreach($a in $ev.assertions){if([string]$a.severity -eq 'REQUIRED'){$required++;if([string]$a.status -eq 'PASS'){$passed++}elseif([string]$a.status -eq 'FAIL'){$failed++}else{$blocked++}}};$unresolved+=@($ev.mutations|Where-Object resolution -eq 'UNRESOLVED').Count;$blockerCount+=@($ev.blockers).Count}
+        $required=0;$passed=0;$failed=0;$blocked=0;$advisory=0;$unresolved=0;$blockerCount=0;$mutationCount=0;$hasRuntime=$false;$hasMutation=$false
+        $scenarioSignatures=@();$findingSignatures=@();$blockerSignatures=@();$mutationSummary=@();$runtimeSignatures=@();$requiredImpact=@();$coveredImpact=@();$targetOperations=@();$testedOperations=@();$started=@();$finished=@()
+        foreach($sid in @($request.testPlan.selectedScenarioIds)){
+            if(!$evidenceByScenario.ContainsKey([string]$sid)){continue};$fact=$evidenceByScenario[[string]$sid];$ev=$fact.value;$scenario=$scenarioById[[string]$sid]
+            $started+=[DateTimeOffset]::Parse([string]$ev.timing.startedAt);$finished+=[DateTimeOffset]::Parse([string]$ev.timing.finishedAt)
+            $hasRuntime=$hasRuntime -or @($ev.requests).Count -gt 0 -or $null -ne $ev.runtime.authProfileFingerprint
+            $targetOperations+=@($scenario.operations|ForEach-Object{[string]$_.id});$testedOperations+=@($ev.scope.observedOperations)
+            foreach($declaredAssertion in $scenario.assertions){if([string]$declaredAssertion.severity -eq 'REQUIRED'){$requiredImpact+=@($declaredAssertion.impactKeys)}}
+            foreach($a in $ev.assertions){
+                if([string]$a.severity -eq 'REQUIRED'){$required++;if([string]$a.status -eq 'PASS'){$passed++;$coveredImpact+=@($a.impactKeys)}elseif([string]$a.status -eq 'FAIL'){$failed++;$coveredImpact+=@($a.impactKeys)}else{$blocked++}}
+                elseif([string]$a.status -ne 'PASS'){$advisory++}
+                if([string]$a.status -eq 'FAIL'){$findingSignatures+="$sid|$($a.id)|$(if([string]$a.severity -eq 'REQUIRED'){'PRODUCT_DEFECT'}else{'ADVISORY'})|$($a.findingFingerprint)|$(Get-Hash $fact.path)"}
+            }
+            foreach($b in $ev.blockers){$blockerCount++;$blockerSignatures+="$sid|$($b.code)|$($b.reason)|$($b.nextStep)"}
+            foreach($m in $ev.mutations){$mutationCount++;$hasMutation=$true;if([string]$m.resolution -eq 'UNRESOLVED'){$unresolved++};$mutationSummary+="$sid/$($m.id):$($m.resolution)"}
+            $reqAssertions=@($ev.assertions|Where-Object{[string]$_.severity -eq 'REQUIRED'})
+            $relativeEvidence=[IO.Path]::GetRelativePath($workspace,$fact.path).Replace('\','/')
+            $scenarioSignatures+="$sid|$($ev.scope.scenarioHash)|$relativeEvidence|$(Get-Hash $fact.path)|$($ev.verdict)|$($reqAssertions.Count)|$(@($reqAssertions|Where-Object status -eq 'PASS').Count)|$(@($reqAssertions|Where-Object status -eq 'FAIL').Count)|$(@($reqAssertions|Where-Object status -eq 'BLOCKED').Count)|$(@($ev.artifacts).Count)"
+            $runtimeSignatures+="$sid|$($ev.runtime.runnerId)|$($ev.runtime.protocol)|$($ev.runtime.serviceIdentityHash)|$($ev.runtime.authProfileFingerprint)"
+        }
         $expectedVerdict=if($blocked -gt 0 -or $unresolved -gt 0 -or $blockerCount -gt 0){'BLOCKED'}elseif($failed -gt 0){'FAIL'}else{'PASS'}
-        if([string]$receipt.result.verdict -ne $expectedVerdict -or [int]$receipt.result.requiredAssertionCount -ne $required -or [int]$receipt.result.passedAssertionCount -ne $passed -or [int]$receipt.result.failedAssertionCount -ne $failed -or [int]$receipt.result.blockedAssertionCount -ne $blocked){ Add-Error 'receipt aggregate result mismatch' }
+        $expectedOutcome=if($expectedVerdict -eq 'BLOCKED'){'BLOCKED'}elseif($expectedVerdict -eq 'FAIL'){if([string]$request.run.mode -eq 'FIX_VERIFICATION'){'REGRESSION_FOUND'}elseif([string]$request.run.mode -eq 'DEFECT_REPRODUCTION'){'DEFECT_REPRODUCED'}else{'DEFECT_FOUND'}}elseif([string]$request.run.mode -eq 'FIX_VERIFICATION'){'FIX_VERIFIED'}else{'NO_DEFECT'}
+        $expectedClosure=if($expectedVerdict -eq 'BLOCKED'){'BLOCKED'}elseif($expectedVerdict -eq 'FAIL'){'OPEN'}elseif([string]$request.run.mode -eq 'FIX_VERIFICATION'){'CLOSED'}else{'NOT_APPLICABLE'}
+        if([string]$receipt.result.verdict -ne $expectedVerdict -or [int]$receipt.result.requiredAssertionCount -ne $required -or [int]$receipt.result.passedAssertionCount -ne $passed -or [int]$receipt.result.failedAssertionCount -ne $failed -or [int]$receipt.result.blockedAssertionCount -ne $blocked -or [int]$receipt.result.advisoryNonPassCount -ne $advisory -or [string]$receipt.result.reasonClass -ne $(if($expectedVerdict -eq 'PASS'){'none'}elseif($expectedVerdict -eq 'FAIL'){'product-failure'}else{'blocked'})){ Add-Error 'receipt aggregate result mismatch' }
+        if([string]$receipt.run.outcome -ne $expectedOutcome -or [string]$receipt.run.closure -ne $expectedClosure){Add-Error 'receipt outcome or closure mismatch'}
+        $actualScenario=@($receipt.scenarioResults|ForEach-Object{"$($_.scenarioId)|$($_.scenarioHash)|$($_.evidencePath)|$($_.evidenceHash)|$($_.verdict)|$($_.requiredAssertionCount)|$($_.passedAssertionCount)|$($_.failedAssertionCount)|$($_.blockedAssertionCount)|$($_.artifactCount)"})
+        $actualFindings=@($receipt.findings|ForEach-Object{"$($_.scenarioId)|$($_.assertionId)|$($_.classification)|$($_.fingerprint)|$($_.evidenceHash)"})
+        $actualBlockers=@($receipt.blockers|ForEach-Object{"$($_.scenarioId)|$($_.code)|$($_.reason)|$($_.nextStep)"})
+        $actualRuntime=@($receipt.runtimeProfiles|ForEach-Object{"$($_.scenarioId)|$($_.runnerId)|$($_.protocol)|$($_.serviceIdentityHash)|$($_.authProfileFingerprint)"})
+        if(!(Set-Equal $actualScenario $scenarioSignatures) -or !(Set-Equal $actualFindings $findingSignatures) -or !(Set-Equal $actualBlockers $blockerSignatures) -or !(Set-Equal $actualRuntime $runtimeSignatures)){Add-Error 'receipt scenario, finding, blocker, or runtime aggregate mismatch'}
+        $requiredImpact=@($requiredImpact|Sort-Object -Unique -CaseSensitive);$coveredImpact=@($coveredImpact|Sort-Object -Unique -CaseSensitive);$uncoveredImpact=@($requiredImpact|Where-Object{[string]$_ -notin $coveredImpact}|Sort-Object -Unique -CaseSensitive)
+        if(!(Set-Equal @($receipt.coverage.requiredImpactKeys) $requiredImpact) -or !(Set-Equal @($receipt.coverage.coveredImpactKeys) $coveredImpact) -or !(Set-Equal @($receipt.coverage.uncoveredImpactKeys) $uncoveredImpact) -or !(Set-Equal @($receipt.coverage.targetOperations) @($targetOperations|Sort-Object -Unique -CaseSensitive)) -or !(Set-Equal @($receipt.coverage.testedOperations) @($testedOperations|Sort-Object -Unique -CaseSensitive)) -or @($receipt.coverage.untestedScenarioIds).Count -ne 0){Add-Error 'receipt coverage aggregate mismatch'}
+        if([int]$receipt.mutations.count -ne $mutationCount -or [int]$receipt.mutations.unresolvedCount -ne $unresolved -or !(Set-Equal @($receipt.mutations.summary) $mutationSummary)){Add-Error 'receipt mutation aggregate mismatch'}
+        if($started.Count -gt 0){$expectedStart=($started|Sort-Object|Select-Object -First 1);$expectedFinish=($finished|Sort-Object|Select-Object -Last 1);if([DateTimeOffset]::Parse([string]$receipt.timing.startedAt) -ne $expectedStart -or [DateTimeOffset]::Parse([string]$receipt.timing.finishedAt) -ne $expectedFinish -or [long]$receipt.timing.durationMs -ne [long](($expectedFinish-$expectedStart).TotalMilliseconds)){Add-Error 'receipt timing aggregate mismatch'}}
+        $expectedFreshClass=if($hasRuntime -and $hasMutation){'MIXED'}elseif($hasMutation){'LIVE_MUTABLE'}elseif($hasRuntime){'RUNTIME_BOUND'}else{'DETERMINISTIC'}
+        $expectedKeys=@('candidate','adapter','catalog','scenario','environment','service-runtime','contract','artifact');if($null -ne $request.environment.authProfileFingerprint){$expectedKeys+='auth-profile'};if($hasMutation){$expectedKeys+='mutation-state'};if($expectedFreshClass -ne 'DETERMINISTIC'){$expectedKeys+='time'}
+        if([string]$receipt.freshness.class -ne $expectedFreshClass -or !(Set-Equal @($receipt.freshness.invalidationKeys) $expectedKeys)){Add-Error 'receipt freshness classification mismatch'}
+        if($expectedFreshClass -eq 'DETERMINISTIC'){if([int]$receipt.freshness.freshForSeconds -ne 0 -or $null -ne $receipt.freshness.expiresAt){Add-Error 'deterministic receipt has an expiry'}}else{if([int]$receipt.freshness.freshForSeconds -le 0 -or $null -eq $receipt.freshness.expiresAt -or [DateTimeOffset]::Parse([string]$receipt.freshness.expiresAt) -ne [DateTimeOffset]::Parse([string]$receipt.issuedAt).AddSeconds([int]$receipt.freshness.freshForSeconds)){Add-Error 'runtime-bound receipt expiry is inconsistent'}}
         if($RequireUnexpired -and $null -ne $receipt.freshness.expiresAt -and $AsOf -ge [DateTimeOffset]::Parse([string]$receipt.freshness.expiresAt)){ Add-Error 'receipt freshness expired' }
     }
 }
@@ -330,7 +488,12 @@ if($NativeLeafSummaryPath){
         if([string]$leaf.request.sha256 -ne $requestHash -or !(Set-Equal @($leaf.selection.selected) @($request.testPlan.selectedScenarioIds)) -or !(Set-Equal @($leaf.selection.executed) @($evidenceByScenario.Keys)) -or !(Set-Equal @($leaf.selection.excluded) $expectedExcluded)){ Add-Error 'native leaf summary input or selection mismatch' }
         foreach($pair in @(@('sourceHash',$request.candidate.sourceHash),@('diffHash',$request.candidate.diffHash),@('serviceIdentityHash',$request.environment.serviceIdentityHash),@('destinationFingerprint',$request.environment.destinationFingerprint),@('contractCombinedSha256',$request.environment.contractCombinedSha256),@('operationIndexHash',$request.environment.operationIndexHash))){ if([string]$leaf.subject.($pair[0]) -ne [string]$pair[1]){ Add-Error "native leaf $($pair[0]) mismatch" } }
         if(![string]::IsNullOrWhiteSpace($CurrentAttestationPath) -and ([string]$leaf.subject.attestationHash -ne (Get-Hash ([IO.Path]::GetFullPath($CurrentAttestationPath))) -or [string]$leaf.freshness.attestationHash -ne [string]$leaf.subject.attestationHash)){ Add-Error 'native leaf current attestation mismatch' }
-        foreach($row in $leaf.evidence){ if(!$evidenceByScenario.ContainsKey([string]$row.scenarioId) -or (Get-Hash $evidenceByScenario[[string]$row.scenarioId].path) -ne [string]$row.sha256){ Add-Error "native leaf evidence mismatch: $($row.scenarioId)" } }
+        $leafEvidence=@();$leafFindings=@();$leafBlockers=@();$leafRequired=0;$leafPassed=0;$leafFailed=0;$leafBlocked=0;$leafMutations=0;$leafUnresolved=0
+        foreach($sid in @($request.testPlan.selectedScenarioIds)){if(!$evidenceByScenario.ContainsKey([string]$sid)){continue};$fact=$evidenceByScenario[[string]$sid];$ev=$fact.value;$leafEvidence+="$sid|$([IO.Path]::GetRelativePath($workspace,$fact.path).Replace('\','/'))|$(Get-Hash $fact.path)|$($ev.verdict)";foreach($a in $ev.assertions){if([string]$a.severity -eq 'REQUIRED'){$leafRequired++;if([string]$a.status -eq 'PASS'){$leafPassed++}elseif([string]$a.status -eq 'FAIL'){$leafFailed++}else{$leafBlocked++}};if([string]$a.status -eq 'FAIL'){$leafFindings+="$sid/$($a.id)/$($a.findingFingerprint)"}};foreach($b in $ev.blockers){$leafBlockers+="$sid/$($b.code): $($b.reason)"};foreach($m in $ev.mutations){$leafMutations++;if([string]$m.resolution -eq 'UNRESOLVED'){$leafUnresolved++}}}
+        $actualLeafEvidence=@($leaf.evidence|ForEach-Object{"$($_.scenarioId)|$($_.path)|$($_.sha256)|$($_.verdict)"})
+        $expectedLeafVerdict=if($leafBlockers.Count -gt 0 -or $leafUnresolved -gt 0 -or $leafBlocked -gt 0){'BLOCKED'}elseif($leafFailed -gt 0){'FAIL'}else{'PASS'}
+        if(!(Set-Equal $actualLeafEvidence $leafEvidence) -or !(Set-Equal @($leaf.findings) $leafFindings) -or !(Set-Equal @($leaf.blockers) $leafBlockers)){Add-Error 'native leaf evidence, findings, or blockers aggregate mismatch'}
+        if([string]$leaf.result.verdict -ne $expectedLeafVerdict -or [int]$leaf.result.requiredAssertions -ne $leafRequired -or [int]$leaf.result.passedAssertions -ne $leafPassed -or [int]$leaf.result.failedAssertions -ne $leafFailed -or [int]$leaf.result.blockedAssertions -ne $leafBlocked -or [int]$leaf.mutations.count -ne $leafMutations -or [int]$leaf.mutations.unresolvedCount -ne $leafUnresolved){Add-Error 'native leaf result or mutation aggregate mismatch'}
     }
 }
 

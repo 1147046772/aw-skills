@@ -16,8 +16,17 @@
     },
     "destination": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "serviceId", "fingerprint"],
-      "properties": { "id": { "$ref": "#/$defs/id" }, "serviceId": { "$ref": "#/$defs/id" }, "fingerprint": { "$ref": "#/$defs/hash" } }
+      "required": ["id", "serviceId", "fingerprint", "observedScheme", "observedHost", "observedPort", "observedBasePath", "finalObservedScheme", "finalObservedHost", "finalObservedPort", "finalObservedBasePath", "redirectChain", "proxyUsed", "resolvedAddresses", "networkScope", "tlsPeerFingerprint", "observationProviderId", "observationCommandHash"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "serviceId": { "$ref": "#/$defs/id" }, "fingerprint": { "$ref": "#/$defs/hash" },
+        "observedScheme": { "enum": ["http", "https"] }, "observedHost": { "type": "string", "minLength": 1 }, "observedPort": { "type": "integer", "minimum": 1, "maximum": 65535 }, "observedBasePath": { "type": "string", "pattern": "^/" },
+        "finalObservedScheme": { "enum": ["http", "https"] }, "finalObservedHost": { "type": "string", "minLength": 1 }, "finalObservedPort": { "type": "integer", "minimum": 1, "maximum": 65535 }, "finalObservedBasePath": { "type": "string", "pattern": "^/" },
+        "redirectChain": { "type": "array", "maxItems": 0 }, "proxyUsed": { "const": false },
+        "resolvedAddresses": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "networkScope": { "enum": ["loopback", "container-internal", "private-network", "public-network"] },
+        "tlsPeerFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "observationProviderId": { "$ref": "#/$defs/id" }, "observationCommandHash": { "$ref": "#/$defs/hash" }
+      }
     },
     "service": {
       "type": "object", "additionalProperties": false,

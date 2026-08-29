@@ -3,4 +3,4 @@ interface:
   short_description: "执行身份绑定的 API 测试并生成可独立验证的叶证据或标准回执"
   default_prompt: "Use $api-test to verify the destination, API contract manifest, operation index, current runtime identity, permissions, and selected scenarios; execute the smallest sufficient API test boundary; then emit hash-bound evidence and the configured generic receipt or project-native leaf summary."
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false
