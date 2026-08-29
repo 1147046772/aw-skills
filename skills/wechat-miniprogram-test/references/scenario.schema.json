@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/wechat-miniprogram-test/scenario.schema.json",
+  "title": "WeChat Mini Program Test Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "scenarioVersion", "id", "title", "priority", "tags",
+    "testType", "impact", "targetPages", "session", "runtime", "preconditions", "fixture",
+    "permissions", "writePolicy", "steps", "assertions", "evidencePolicy",
+    "stopConditions", "timeBudgetSeconds"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "4.0" },
+    "scenarioVersion": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "title": { "type": "string", "minLength": 1 },
+    "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+    "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "testType": { "$ref": "#/$defs/testType" },
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keys", "risk"],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/impactKey" }
+        },
+        "risk": { "enum": ["local", "shared", "cross-surface"] }
+      }
+    },
+    "targetPages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["route", "entryMode", "parameterKeys"],
+        "properties": {
+          "route": { "type": "string", "minLength": 1 },
+          "entryMode": { "enum": ["current", "navigate", "redirect", "relaunch", "switch-tab", "deep-link"] },
+          "parameterKeys": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "expectedRole", "expectedScope"],
+      "properties": {
+        "mode": { "enum": ["none", "optional", "required"] },
+        "expectedRole": { "type": ["string", "null"] },
+        "expectedScope": { "type": ["string", "null"] }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "runnerId", "requiredTools"],
+      "properties": {
+        "channel": { "$ref": "#/$defs/channel" },
+        "runnerId": { "type": ["string", "null"] },
+        "requiredTools": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "expected", "required"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["project", "candidate", "environment", "config", "session", "page", "api", "fixture", "permission", "device"] },
+          "expected": {},
+          "required": { "type": "boolean" }
+        }
+      }
+    },
+    "fixture": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "sourceRef", "resetAuthorized"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "sourceRef": { "type": "string", "minLength": 1 },
+            "resetAuthorized": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pages", "navigation", "elementRead", "devtoolsLifecycle", "runtimeRead",
+        "networkAccess", "screenshot", "manualObservation", "loginAction",
+        "accountSwitch", "businessWrite", "testDataMutation", "deviceStateChange"
+      ],
+      "properties": {
+        "pages": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "navigation": { "type": "boolean" },
+        "elementRead": { "type": "boolean" },
+        "devtoolsLifecycle": { "type": "boolean" },
+        "runtimeRead": { "type": "boolean" },
+        "networkAccess": { "type": "boolean" },
+        "screenshot": { "type": "boolean" },
+        "manualObservation": { "type": "boolean" },
+        "loginAction": { "type": "boolean" },
+        "accountSwitch": { "type": "boolean" },
+        "businessWrite": { "type": "boolean" },
+        "testDataMutation": { "type": "boolean" },
+        "deviceStateChange": { "type": "boolean" }
+      }
+    },
+    "writePolicy": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxAttempts", "idempotencyRequired", "rollbackOrCompensation"],
+          "properties": {
+            "maxAttempts": { "const": 1 },
+            "idempotencyRequired": { "const": true },
+            "rollbackOrCompensation": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "action", "target", "inputRef", "wait", "mutationClass", "idempotencyStrategy"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 },
+          "target": { "$ref": "#/$defs/targetOrNull" },
+          "inputRef": { "type": ["string", "null"] },
+          "wait": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["condition", "expected", "timeoutMs"],
+            "properties": {
+              "condition": { "enum": ["none", "visible", "hidden", "text", "value", "page", "request-complete", "state", "event", "permission", "process-exit", "artifact"] },
+              "expected": {},
+              "timeoutMs": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "mutationClass": { "enum": ["none", "login", "account-switch", "business-write", "test-data", "device-state"] },
+          "idempotencyStrategy": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "contains": { "properties": { "severity": { "const": "REQUIRED" } }, "required": ["severity"] },
+      "minContains": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "kind", "target", "operator", "expected", "sourceOfTruth", "severity", "impactKeys", "evidenceTypes"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["page", "visible", "text", "value", "structure", "runtime", "network", "console", "business", "invariant", "device", "artifact", "process"] },
+          "target": { "$ref": "#/$defs/targetOrNull" },
+          "operator": { "enum": ["equals", "not-equals", "contains", "matches", "truthy", "falsy", "exists", "not-exists", "gt", "gte", "lt", "lte"] },
+          "expected": {},
+          "sourceOfTruth": { "enum": ["ui", "runtime", "api", "device", "artifact", "process"] },
+          "severity": { "enum": ["REQUIRED", "ADVISORY"] },
+          "impactKeys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/impactKey" }
+          },
+          "evidenceTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["runtime-state", "screenshot", "console", "network", "trace", "video", "report", "process-output", "other"] }
+          }
+        }
+      }
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenshots", "console", "network", "trace", "video", "redactFields"],
+      "properties": {
+        "screenshots": { "enum": ["none", "required-only", "on-failure", "all"] },
+        "console": { "enum": ["none", "delta"] },
+        "network": { "enum": ["none", "delta"] },
+        "trace": { "type": "boolean" },
+        "video": { "type": "boolean" },
+        "redactFields": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "stopConditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "condition", "classification", "detail"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "condition": { "type": "string", "minLength": 1 },
+          "classification": { "enum": ["FAIL", "BLOCKED", "STOP"] },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "timeBudgetSeconds": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "testType": { "enum": ["static", "compile", "unit", "component", "ui", "integration", "device"] },
+    "channel": { "enum": ["none", "wechatide-mcp", "automator", "human", "device"] },
+    "impactKey": {
+      "type": "string",
+      "pattern": "^(source|page|component|api|state|data|permission|config|contract|invariant|device):.+$"
+    },
+    "targetOrNull": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "enum": ["page", "selector", "text", "test-id", "accessibility", "runtime", "api", "device", "artifact", "process"] },
+            "value": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "permissions": { "properties": { "businessWrite": { "const": true } }, "required": ["businessWrite"] } } },
+          { "properties": { "permissions": { "properties": { "testDataMutation": { "const": true } }, "required": ["testDataMutation"] } } }
+        ]
+      },
+      "then": {
+        "properties": {
+          "fixture": { "type": "object" },
+          "writePolicy": { "type": "object" },
+          "steps": {
+            "contains": {
+              "properties": {
+                "mutationClass": { "enum": ["business-write", "test-data"] },
+                "idempotencyStrategy": { "type": "string", "minLength": 1 }
+              },
+              "required": ["mutationClass", "idempotencyStrategy"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "testType": { "enum": ["ui", "device"] } }, "required": ["testType"] },
+      "then": {
+        "properties": {
+          "targetPages": { "minItems": 1 },
+          "permissions": { "properties": { "pages": { "minItems": 1 } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "testType": { "const": "device" } }, "required": ["testType"] },
+      "then": { "properties": { "runtime": { "properties": { "channel": { "const": "device" } } } } }
+    },
+    {
+      "if": { "properties": { "testType": { "enum": ["static", "compile", "unit", "component", "integration"] } }, "required": ["testType"] },
+      "then": { "properties": { "runtime": { "properties": { "runnerId": { "type": "string", "minLength": 1 } } } } }
+    },
+    {
+      "if": { "properties": { "runtime": { "properties": { "channel": { "const": "human" } } } }, "required": ["runtime"] },
+      "then": { "properties": { "permissions": { "properties": { "manualObservation": { "const": true } } } } }
+    }
+  ]
+}

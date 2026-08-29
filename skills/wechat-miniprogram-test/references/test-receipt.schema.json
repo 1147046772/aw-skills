@@ -1,0 +1,497 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/wechat-miniprogram-test/test-receipt.schema.json",
+  "title": "Canonical WeChat Mini Program Test Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "receiptId", "issuedAt", "authority", "input", "subject",
+    "run", "defectLineage", "selection", "timing", "runtimeProfiles", "result",
+    "scenarioResults", "findings", "blockers", "coverage", "mutations", "freshness", "producer"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "3.2" },
+    "receiptId": { "type": "string", "minLength": 8 },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "authority": { "const": "TEST_EVIDENCE_ONLY" },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId", "requestPath", "requestSha256", "projectAdapterPath",
+        "projectAdapterSha256", "catalogPath", "catalogSha256"
+      ],
+      "properties": {
+        "requestId": { "type": "string", "minLength": 8 },
+        "requestPath": { "$ref": "#/$defs/relativePath" },
+        "requestSha256": { "$ref": "#/$defs/hash" },
+        "projectAdapterPath": { "$ref": "#/$defs/relativePath" },
+        "projectAdapterSha256": { "$ref": "#/$defs/hash" },
+        "catalogPath": { "$ref": "#/$defs/relativePath" },
+        "catalogSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId", "projectAdapterId", "candidateRevision", "diffHash", "sourceHash",
+        "buildId", "environment", "appId", "apiIdentity", "environmentConfigHash"
+      ],
+      "properties": {
+        "projectId": { "type": "string", "minLength": 1 },
+        "projectAdapterId": { "type": "string", "minLength": 1 },
+        "candidateRevision": { "type": "string", "minLength": 1 },
+        "diffHash": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+        "sourceHash": { "$ref": "#/$defs/hash" },
+        "buildId": { "type": ["string", "null"] },
+        "environment": { "type": "string", "minLength": 1 },
+        "appId": { "type": ["string", "null"] },
+        "apiIdentity": { "type": ["string", "null"] },
+        "environmentConfigHash": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "mode", "outcome", "closure"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 8 },
+        "mode": { "enum": ["BASELINE", "TARGETED", "DEFECT_REPRODUCTION", "FIX_VERIFICATION", "REGRESSION"] },
+        "outcome": { "enum": ["NO_DEFECT", "DEFECT_FOUND", "DEFECT_REPRODUCED", "DEFECT_NOT_REPRODUCED", "FIX_VERIFIED", "REGRESSION_FOUND", "BLOCKED"] },
+        "closure": { "enum": ["NOT_APPLICABLE", "OPEN", "PARTIAL", "CLOSED", "BLOCKED"] }
+      }
+    },
+    "defectLineage": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lineageId", "round", "source", "defects"],
+          "properties": {
+            "lineageId": { "type": "string", "minLength": 8 },
+            "round": { "type": "integer", "minimum": 1 },
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "reference", "path", "sha256"],
+              "properties": {
+                "type": { "enum": ["PARENT_RECEIPT", "EXTERNAL_EVIDENCE"] },
+                "reference": { "type": "string", "minLength": 1 },
+                "path": { "$ref": "#/$defs/relativePath" },
+                "sha256": { "$ref": "#/$defs/hash" }
+              }
+            },
+            "defects": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "defectId", "fingerprint", "priorFailingAssertions",
+                  "currentStatus", "currentFailingAssertions"
+                ],
+                "properties": {
+                  "defectId": { "type": ["string", "null"] },
+                  "fingerprint": { "$ref": "#/$defs/hash" },
+                  "priorFailingAssertions": { "$ref": "#/$defs/assertionGroups" },
+                  "currentStatus": { "enum": ["OPEN", "REPRODUCED", "NOT_REPRODUCED", "FIX_VERIFIED", "BLOCKED"] },
+                  "currentFailingAssertions": { "$ref": "#/$defs/assertionGroups" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy", "catalogScenarioCount", "changedImpactKeys", "seedScenarioIds",
+        "selectedScenarioIds", "executedScenarioIds", "excludedScenarioIds", "reasonByScenario",
+        "upstreamDepth", "downstreamDepth", "activeFullSuiteTriggers"
+      ],
+      "properties": {
+        "strategy": { "enum": ["FULL", "IMPACT"] },
+        "catalogScenarioCount": { "type": "integer", "minimum": 1 },
+        "changedImpactKeys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/impactKey" }
+        },
+        "seedScenarioIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "selectedScenarioIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "executedScenarioIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "excludedScenarioIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reasonByScenario": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["scenarioId", "reasons"],
+            "properties": {
+              "scenarioId": { "type": "string", "minLength": 1 },
+              "reasons": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "enum": ["full-suite", "defect-reproducer", "changed-impact", "shared-impact", "upstream", "downstream"] }
+              }
+            }
+          }
+        },
+        "upstreamDepth": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "downstreamDepth": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "activeFullSuiteTriggers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "impact-unknown", "catalog-stale", "shared-foundation-change",
+              "test-infrastructure-change", "multi-domain-change",
+              "unexpected-outside-impact-failure", "release-baseline", "policy-required"
+            ]
+          }
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedAt", "finishedAt", "durationMs"],
+      "properties": {
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtimeProfiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarioId", "channel", "runnerId", "controllerIdentity",
+          "devtoolsVersion", "protocolVersion", "sessionFingerprint", "commandIdentity", "deviceProfile"
+        ],
+        "properties": {
+          "scenarioId": { "type": "string", "minLength": 1 },
+          "channel": { "$ref": "#/$defs/channel" },
+          "runnerId": { "type": ["string", "null"] },
+          "controllerIdentity": { "type": ["string", "null"] },
+          "devtoolsVersion": { "type": ["string", "null"] },
+          "protocolVersion": { "type": ["string", "null"] },
+          "sessionFingerprint": { "type": ["string", "null"] },
+          "commandIdentity": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+          "deviceProfile": { "$ref": "#/$defs/deviceProfile" }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict", "requiredAssertionCount", "passedAssertionCount",
+        "failedAssertionCount", "blockedAssertionCount", "advisoryNonPassCount",
+        "reasonClass"
+      ],
+      "properties": {
+        "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] },
+        "requiredAssertionCount": { "type": "integer", "minimum": 1 },
+        "passedAssertionCount": { "type": "integer", "minimum": 0 },
+        "failedAssertionCount": { "type": "integer", "minimum": 0 },
+        "blockedAssertionCount": { "type": "integer", "minimum": 0 },
+        "advisoryNonPassCount": { "type": "integer", "minimum": 0 },
+        "reasonClass": {
+          "enum": [
+            "none", "product-failure", "tool-blocked", "authorization-blocked",
+            "identity-mismatch", "environment-blocked", "fixture-blocked",
+            "session-blocked", "device-blocked", "timeout-blocked",
+            "evidence-insufficient", "boundary-drift", "unknown-blocked"
+          ]
+        }
+      }
+    },
+    "scenarioResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarioId", "scenarioHash", "verdict",
+          "requiredAssertionCount", "passedAssertionCount", "failedAssertionCount",
+          "blockedAssertionCount", "evidencePath", "evidenceSha256", "artifactCount"
+        ],
+        "properties": {
+          "scenarioId": { "type": "string", "minLength": 1 },
+          "scenarioHash": { "$ref": "#/$defs/hash" },
+          "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] },
+          "requiredAssertionCount": { "type": "integer", "minimum": 1 },
+          "passedAssertionCount": { "type": "integer", "minimum": 0 },
+          "failedAssertionCount": { "type": "integer", "minimum": 0 },
+          "blockedAssertionCount": { "type": "integer", "minimum": 0 },
+          "evidencePath": { "$ref": "#/$defs/relativePath" },
+          "evidenceSha256": { "$ref": "#/$defs/hash" },
+          "artifactCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fingerprint", "defectId", "classification", "scenarioId", "assertionId", "evidencePath", "evidenceSha256"],
+        "properties": {
+          "fingerprint": { "$ref": "#/$defs/hash" },
+          "defectId": { "type": ["string", "null"] },
+          "classification": { "enum": ["PRODUCT_DEFECT", "ADVISORY"] },
+          "scenarioId": { "type": "string", "minLength": 1 },
+          "assertionId": { "type": "string", "minLength": 1 },
+          "evidencePath": { "$ref": "#/$defs/relativePath" },
+          "evidenceSha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarioId", "reasonClass", "detail", "nextStep",
+          "evidencePath", "evidenceSha256"
+        ],
+        "properties": {
+          "scenarioId": { "type": "string", "minLength": 1 },
+          "reasonClass": {
+            "enum": [
+              "authorization", "identity", "login", "client-authorization",
+              "compatibility", "environment", "fixture", "tool", "device", "timeout",
+              "evidence", "product", "unknown"
+            ]
+          },
+          "detail": { "type": "string", "minLength": 1 },
+          "nextStep": { "type": "string", "minLength": 1 },
+          "evidencePath": { "$ref": "#/$defs/relativePath" },
+          "evidenceSha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetPages", "testedPages", "requiredImpactKeys", "coveredImpactKeys",
+        "uncoveredImpactKeys", "untested", "deviceValidated", "businessWritePerformed"
+      ],
+      "properties": {
+        "targetPages": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "testedPages": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "requiredImpactKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+        "coveredImpactKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+        "uncoveredImpactKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+        "untested": { "type": "array", "items": { "type": "string" } },
+        "deviceValidated": { "type": "boolean" },
+        "businessWritePerformed": { "type": "boolean" }
+      }
+    },
+    "mutations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "unresolvedCount", "summary"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "unresolvedCount": { "type": "integer", "minimum": 0 },
+        "summary": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "observedAt", "expiresAt", "invalidationKeys"],
+      "properties": {
+        "class": { "enum": ["DETERMINISTIC", "SESSION_BOUND", "LIVE_MUTABLE", "MIXED"] },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+        "invalidationKeys": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skillName", "skillVersion", "validatorIdentity"],
+      "properties": {
+        "skillName": { "const": "wechat-miniprogram-test" },
+        "skillVersion": { "type": ["string", "null"] },
+        "validatorIdentity": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\]).+"
+    },
+    "impactKey": {
+      "type": "string",
+      "pattern": "^(source|page|component|api|state|data|permission|config|contract|invariant|device):.+$"
+    },
+    "channel": { "enum": ["none", "wechatide-mcp", "automator", "human", "device"] },
+    "deviceProfile": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "deviceClass", "model", "osVersion", "wechatVersion",
+            "networkProfile", "permissionStateHash", "stateRestorationAuthorized"
+          ],
+          "properties": {
+            "deviceClass": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 },
+            "osVersion": { "type": "string", "minLength": 1 },
+            "wechatVersion": { "type": "string", "minLength": 1 },
+            "networkProfile": { "type": "string", "minLength": 1 },
+            "permissionStateHash": { "$ref": "#/$defs/hash" },
+            "stateRestorationAuthorized": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "assertionGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenarioId", "assertionIds"],
+        "properties": {
+          "scenarioId": { "type": "string", "minLength": 1 },
+          "assertionIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "PASS" } }, "required": ["verdict"] } } },
+      "then": {
+        "properties": {
+          "result": {
+            "properties": {
+              "failedAssertionCount": { "const": 0 },
+              "blockedAssertionCount": { "const": 0 },
+              "reasonClass": { "const": "none" }
+            }
+          },
+          "scenarioResults": { "minItems": 1, "items": { "properties": { "verdict": { "const": "PASS" } } } },
+          "blockers": { "maxItems": 0 },
+          "coverage": { "properties": { "untested": { "maxItems": 0 }, "uncoveredImpactKeys": { "maxItems": 0 } } },
+          "mutations": { "properties": { "unresolvedCount": { "const": 0 } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "FAIL" } }, "required": ["verdict"] } } },
+      "then": {
+        "properties": {
+          "result": { "properties": { "failedAssertionCount": { "minimum": 1 }, "reasonClass": { "const": "product-failure" } } },
+          "scenarioResults": { "contains": { "properties": { "verdict": { "const": "FAIL" } }, "required": ["verdict"] }, "minContains": 1 },
+          "findings": { "contains": { "properties": { "classification": { "const": "PRODUCT_DEFECT" } }, "required": ["classification"] }, "minContains": 1 },
+          "blockers": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "BLOCKED" } }, "required": ["verdict"] } } },
+      "then": {
+        "properties": {
+          "result": { "properties": { "reasonClass": { "not": { "const": "none" } } } },
+          "run": { "properties": { "outcome": { "const": "BLOCKED" }, "closure": { "const": "BLOCKED" } } },
+          "blockers": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "run": { "properties": { "mode": { "const": "FIX_VERIFICATION" } }, "required": ["mode"] },
+          "result": { "properties": { "verdict": { "const": "PASS" } }, "required": ["verdict"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "run": {
+            "properties": {
+              "outcome": { "const": "FIX_VERIFIED" },
+              "closure": { "const": "CLOSED" }
+            }
+          },
+          "defectLineage": {
+            "type": "object",
+            "properties": { "defects": { "items": { "properties": { "currentStatus": { "const": "FIX_VERIFIED" }, "currentFailingAssertions": { "maxItems": 0 } } } } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "coverage": { "properties": { "deviceValidated": { "const": true } } } }, "required": ["coverage"] },
+      "then": {
+        "properties": {
+          "runtimeProfiles": {
+            "contains": { "properties": { "deviceProfile": { "type": "object" } }, "required": ["deviceProfile"] },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtimeProfiles": {
+            "contains": { "properties": { "channel": { "enum": ["wechatide-mcp", "automator", "device"] } }, "required": ["channel"] },
+            "minContains": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtimeProfiles": {
+            "items": {
+              "if": { "properties": { "channel": { "enum": ["wechatide-mcp", "automator", "device"] } }, "required": ["channel"] },
+              "then": { "properties": { "sessionFingerprint": { "type": "string", "minLength": 1 } } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

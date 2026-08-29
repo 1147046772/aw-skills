@@ -1,0 +1,17 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Skills repository
+        shell: pwsh
+        run: ./scripts/Test-Repository.ps1

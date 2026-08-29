@@ -1,0 +1,6 @@
+interface:
+  display_name: "微信小程序自动化测试"
+  short_description: "执行边界明确的小程序自动化测试并生成可独立验证的标准凭证"
+  default_prompt: "Use $wechat-miniprogram-test to validate the test contract, execute the smallest sufficient WeChat Mini Program test boundary, write one evidence file per executed scenario, and generate one canonical test receipt."
+policy:
+  allow_implicit_invocation: true

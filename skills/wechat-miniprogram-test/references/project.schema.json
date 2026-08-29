@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/wechat-miniprogram-test/project.schema.json",
+  "title": "WeChat Mini Program Test Project Adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "adapterVersion", "adapterId", "projectId", "framework",
+    "roots", "files", "candidateIdentity", "runners", "supportedChannels",
+    "capabilities", "evidenceRoot", "secretEnvKeys"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "adapterVersion": { "type": "string", "minLength": 1 },
+    "adapterId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "projectId": { "type": "string", "minLength": 1 },
+    "framework": { "enum": ["native-wechat", "taro", "uni-app", "custom-wechat-output"] },
+    "roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspace", "source", "devtoolsProject"],
+      "properties": {
+        "workspace": { "$ref": "#/$defs/relativePath" },
+        "source": { "$ref": "#/$defs/relativePath" },
+        "devtoolsProject": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectConfig", "packageManifest", "scenarioRoot"],
+      "properties": {
+        "projectConfig": { "$ref": "#/$defs/relativePath" },
+        "packageManifest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }]
+        },
+        "scenarioRoot": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "candidateIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "definitionRef", "command"],
+      "properties": {
+        "method": {
+          "enum": [
+            "git-manifest-sha256", "filesystem-manifest-sha256",
+            "build-manifest-sha256", "custom"
+          ]
+        },
+        "definitionRef": { "$ref": "#/$defs/relativePath" },
+        "command": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/readOnlyCommand" }
+          ]
+        }
+      }
+    },
+    "runners": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "testTypes", "channel", "argvTemplate", "cwd",
+          "timeoutSeconds", "envKeys", "mutationClass", "capabilities"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+          "testTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/testType" }
+          },
+          "channel": { "$ref": "#/$defs/channel" },
+          "argvTemplate": { "$ref": "#/$defs/argvTemplate" },
+          "cwd": { "$ref": "#/$defs/relativePath" },
+          "timeoutSeconds": { "type": "integer", "minimum": 1 },
+          "envKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+          },
+          "mutationClass": { "enum": ["NONE", "BUILD_OUTPUT", "TEST_OUTPUT"] },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "supportedChannels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/channel" }
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "evidenceRoot": { "$ref": "#/$defs/relativePath" },
+    "secretEnvKeys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\]).+"
+    },
+    "testType": {
+      "enum": ["static", "compile", "unit", "component", "ui", "integration", "device"]
+    },
+    "channel": {
+      "enum": ["none", "wechatide-mcp", "automator", "human", "device"]
+    },
+    "argvTemplate": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "readOnlyCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argvTemplate", "cwd", "timeoutSeconds", "envKeys", "mutationClass"],
+      "properties": {
+        "argvTemplate": { "$ref": "#/$defs/argvTemplate" },
+        "cwd": { "$ref": "#/$defs/relativePath" },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "envKeys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+        },
+        "mutationClass": { "const": "NONE" }
+      }
+    }
+  }
+}

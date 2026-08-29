@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/wechat-miniprogram-test/evidence.schema.json",
+  "title": "WeChat Mini Program Scenario Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "evidenceId", "requestId", "verdict", "timing", "scope",
+    "preflight", "runtime", "session", "preconditions", "steps", "assertions",
+    "artifacts", "diagnostics", "interactions", "mutations", "excluded", "blockers"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "3.2" },
+    "evidenceId": { "type": "string", "minLength": 8 },
+    "requestId": { "type": "string", "minLength": 8 },
+    "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedAt", "finishedAt", "durationMs"],
+      "properties": {
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId", "projectAdapterId", "projectAdapterHash", "requestHash",
+        "environment", "appId", "apiIdentity", "environmentConfigHash", "candidateRevision",
+        "diffHash", "sourceHash", "buildId", "runId", "runMode",
+        "defectLineageId", "defectRound", "scenarioId", "scenarioVersion", "scenarioHash",
+        "selectionReasons", "observedPages", "businessWrite"
+      ],
+      "properties": {
+        "projectId": { "type": "string", "minLength": 1 },
+        "projectAdapterId": { "type": "string", "minLength": 1 },
+        "projectAdapterHash": { "$ref": "#/$defs/hash" },
+        "requestHash": { "$ref": "#/$defs/hash" },
+        "environment": { "type": "string", "minLength": 1 },
+        "appId": { "type": ["string", "null"] },
+        "apiIdentity": { "type": ["string", "null"] },
+        "environmentConfigHash": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+        "candidateRevision": { "type": "string", "minLength": 1 },
+        "diffHash": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+        "sourceHash": { "$ref": "#/$defs/hash" },
+        "buildId": { "type": ["string", "null"] },
+        "runId": { "type": "string", "minLength": 8 },
+        "runMode": { "enum": ["BASELINE", "TARGETED", "DEFECT_REPRODUCTION", "FIX_VERIFICATION", "REGRESSION"] },
+        "defectLineageId": { "type": ["string", "null"], "minLength": 8 },
+        "defectRound": { "type": ["integer", "null"], "minimum": 1 },
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "scenarioVersion": { "type": "string", "minLength": 1 },
+        "scenarioHash": { "$ref": "#/$defs/hash" },
+        "selectionReasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["full-suite", "defect-reproducer", "changed-impact", "shared-impact", "upstream", "downstream"] }
+        },
+        "observedPages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "businessWrite": { "type": "boolean" }
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preflightId", "reused", "identityMatched", "requiredToolsAvailable"],
+      "properties": {
+        "preflightId": { "type": "string", "minLength": 1 },
+        "reused": { "type": "boolean" },
+        "identityMatched": { "type": "boolean" },
+        "requiredToolsAvailable": { "type": "boolean" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "runnerId", "controllerIdentity", "sessionFingerprint", "deviceProfile"],
+      "properties": {
+        "channel": { "$ref": "#/$defs/channel" },
+        "runnerId": { "type": ["string", "null"] },
+        "controllerIdentity": { "type": ["string", "null"] },
+        "devtoolsVersion": { "type": ["string", "null"] },
+        "servicePort": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 },
+        "protocolVersion": { "type": ["string", "null"] },
+        "skillVersion": { "type": ["string", "null"] },
+        "processId": { "type": ["integer", "null"], "minimum": 1 },
+        "sessionFingerprint": { "type": ["string", "null"] },
+        "commandIdentity": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+        "runnerExitCode": { "type": ["integer", "null"] },
+        "deviceProfile": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "deviceClass", "model", "osVersion", "wechatVersion",
+                "networkProfile", "permissionStateHash", "stateRestorationAuthorized"
+              ],
+              "properties": {
+                "deviceClass": { "type": "string", "minLength": 1 },
+                "model": { "type": "string", "minLength": 1 },
+                "osVersion": { "type": "string", "minLength": 1 },
+                "wechatVersion": { "type": "string", "minLength": 1 },
+                "networkProfile": { "type": "string", "minLength": 1 },
+                "permissionStateHash": { "$ref": "#/$defs/hash" },
+                "stateRestorationAuthorized": { "type": "boolean" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["devtoolsLoggedIn", "clientAuthorized", "businessSessionMode"],
+      "properties": {
+        "devtoolsLoggedIn": { "type": ["boolean", "null"] },
+        "clientAuthorized": { "type": ["boolean", "null"] },
+        "businessSessionMode": { "enum": ["none", "optional", "required"] },
+        "businessSessionPresent": { "type": ["boolean", "null"] },
+        "expectedRole": { "type": ["string", "null"] },
+        "actualRole": { "type": ["string", "null"] },
+        "actualScope": { "type": ["string", "null"] }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "required", "status", "expected", "actual", "evidenceRefs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" },
+          "status": { "enum": ["PASS", "BLOCKED", "SKIPPED"] },
+          "expected": {},
+          "actual": {},
+          "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "action", "target", "status", "startedAt", "finishedAt", "mutationClass", "evidenceRefs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 },
+          "target": { "type": ["string", "null"] },
+          "status": { "enum": ["PASS", "FAIL", "BLOCKED", "SKIPPED"] },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "finishedAt": { "type": "string", "format": "date-time" },
+          "mutationClass": { "enum": ["none", "login", "account-switch", "business-write", "test-data", "device-state"] },
+          "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "kind", "operator", "sourceOfTruth", "severity", "status",
+          "expected", "actual", "findingFingerprint", "defectIds", "evidenceRefs"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "minLength": 1 },
+          "operator": { "type": "string", "minLength": 1 },
+          "sourceOfTruth": { "enum": ["ui", "runtime", "api", "device", "artifact", "process"] },
+          "severity": { "enum": ["REQUIRED", "ADVISORY"] },
+          "status": { "enum": ["PASS", "FAIL", "BLOCKED"] },
+          "expected": {},
+          "actual": {},
+          "findingFingerprint": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/hash" }] },
+          "defectIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "FAIL" } }, "required": ["status"] },
+            "then": { "properties": { "findingFingerprint": { "$ref": "#/$defs/hash" } } },
+            "else": { "properties": { "findingFingerprint": { "type": "null" } } }
+          }
+        ]
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "path", "sha256", "sizeBytes", "modifiedAt"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["runtime-state", "screenshot", "console", "network", "trace", "video", "report", "process-output", "other"] },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "$ref": "#/$defs/hash" },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "modifiedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineEstablished", "freshConsoleErrors", "freshNetworkFailures"],
+      "properties": {
+        "baselineEstablished": { "type": "boolean" },
+        "correlationId": { "type": ["string", "null"] },
+        "freshConsoleErrors": { "type": "array", "items": { "type": "object" } },
+        "freshNetworkFailures": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "interactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "channel", "action", "target", "status"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "channel": { "enum": ["cli", "wechatide-mcp", "automator", "human", "device", "project-runner"] },
+          "action": { "type": "string", "minLength": 1 },
+          "target": { "type": ["string", "null"] },
+          "status": { "enum": ["OK", "ERROR", "SKIPPED"] }
+        }
+      }
+    },
+    "mutations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "target", "attempts", "preState", "postState", "resolution"],
+        "properties": {
+          "type": { "enum": ["none", "business-write", "data-mutation", "login", "account-switch", "device-state", "other"] },
+          "target": { "type": ["string", "null"] },
+          "attempts": { "type": "integer", "minimum": 0, "maximum": 1 },
+          "idempotencyKeyRedacted": { "type": ["string", "null"] },
+          "preState": {},
+          "postState": {},
+          "resolution": { "enum": ["NOT_APPLICABLE", "RESTORED", "COMPENSATED", "PERSISTED_AUTHORIZED", "UNRESOLVED"] },
+          "rollbackOrCompensation": { "type": ["string", "null"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "attempts": { "const": 0 } }, "required": ["attempts"] },
+            "then": { "properties": { "resolution": { "const": "NOT_APPLICABLE" } } }
+          },
+          {
+            "if": { "properties": { "resolution": { "enum": ["RESTORED", "COMPENSATED"] } }, "required": ["resolution"] },
+            "then": { "properties": { "rollbackOrCompensation": { "type": "string", "minLength": 1 } } }
+          }
+        ]
+      }
+    },
+    "excluded": { "type": "array", "items": { "type": "string" } },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonClass", "detail", "nextStep"],
+        "properties": {
+          "reasonClass": {
+            "enum": [
+              "authorization", "identity", "login", "client-authorization",
+              "compatibility", "environment", "fixture", "tool", "device", "timeout",
+              "evidence", "product", "unknown"
+            ]
+          },
+          "detail": { "type": "string", "minLength": 1 },
+          "nextStep": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "channel": { "enum": ["none", "wechatide-mcp", "automator", "human", "device"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verdict": { "const": "PASS" } }, "required": ["verdict"] },
+      "then": {
+        "properties": {
+          "preflight": {
+            "properties": {
+              "identityMatched": { "const": true },
+              "requiredToolsAvailable": { "const": true }
+            }
+          },
+          "preconditions": {
+            "items": {
+              "if": { "properties": { "required": { "const": true } }, "required": ["required"] },
+              "then": { "properties": { "status": { "const": "PASS" } } }
+            }
+          },
+          "steps": { "items": { "properties": { "status": { "const": "PASS" } } } },
+          "assertions": {
+            "items": {
+              "if": { "properties": { "severity": { "const": "REQUIRED" } }, "required": ["severity"] },
+              "then": { "properties": { "status": { "const": "PASS" } } }
+            }
+          },
+          "mutations": {
+            "items": { "properties": { "resolution": { "not": { "const": "UNRESOLVED" } } } }
+          },
+          "blockers": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "FAIL" } }, "required": ["verdict"] },
+      "then": {
+        "properties": {
+          "assertions": {
+            "contains": {
+              "properties": { "severity": { "const": "REQUIRED" }, "status": { "const": "FAIL" } },
+              "required": ["severity", "status"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "BLOCKED" } }, "required": ["verdict"] },
+      "then": { "properties": { "blockers": { "minItems": 1 } } }
+    },
+    {
+      "if": {
+        "properties": { "runtime": { "properties": { "channel": { "const": "device" } } } },
+        "required": ["runtime"]
+      },
+      "then": { "properties": { "runtime": { "properties": { "deviceProfile": { "type": "object" } } } } }
+    },
+    {
+      "if": {
+        "properties": { "runtime": { "properties": { "channel": { "enum": ["wechatide-mcp", "automator", "device"] } } } },
+        "required": ["runtime"]
+      },
+      "then": { "properties": { "runtime": { "properties": { "sessionFingerprint": { "type": "string", "minLength": 1 } } } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "mutations": {
+            "contains": { "properties": { "resolution": { "const": "UNRESOLVED" } }, "required": ["resolution"] },
+            "minContains": 1
+          }
+        },
+        "required": ["mutations"]
+      },
+      "then": {
+        "properties": {
+          "verdict": { "const": "BLOCKED" },
+          "blockers": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}

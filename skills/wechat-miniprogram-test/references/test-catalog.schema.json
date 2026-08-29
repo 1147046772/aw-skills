@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/wechat-miniprogram-test/test-catalog.schema.json",
+  "title": "WeChat Mini Program Test Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogId", "catalogVersion", "scenarios", "relations"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "catalogId": { "type": "string", "minLength": 1 },
+    "catalogVersion": { "type": "string", "minLength": 1 },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "sha256"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+          "path": { "$ref": "#/$defs/relativePath" },
+          "sha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["upstreamScenarioId", "downstreamScenarioId", "impactKeys"],
+        "properties": {
+          "upstreamScenarioId": { "type": "string", "minLength": 1 },
+          "downstreamScenarioId": { "type": "string", "minLength": 1 },
+          "impactKeys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/impactKey" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\]).+"
+    },
+    "impactKey": {
+      "type": "string",
+      "pattern": "^(source|page|component|api|state|data|permission|config|contract|invariant|device):.+$"
+    }
+  }
+}
