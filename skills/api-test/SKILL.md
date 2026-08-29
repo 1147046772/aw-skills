@@ -2,7 +2,7 @@
 name: api-test
 description: Execute bounded API contract, runtime, authorization, state, idempotency, and integration tests through project-declared runners, and emit hash-bound scenario evidence plus one canonical test receipt. It does not authorize source changes, undeclared data mutation, production access, external-provider calls, release, or deployment.
 metadata:
-  version: "0.2.0-rc.1"
+  version: "0.2.0-rc.2"
 ---
 
 # API Test
