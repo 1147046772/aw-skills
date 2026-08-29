@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/project.schema.json",
+  "title": "API Test Project Adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "adapterVersion", "adapterId", "projectId", "framework", "roots", "files", "candidateIdentity", "serviceIdentity", "destinations", "contracts", "runners", "supportedProtocols", "capabilities", "evidenceRoot", "evidenceMode", "secretEnvKeys"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "adapterVersion": { "type": "string", "minLength": 1 },
+    "adapterId": { "$ref": "#/$defs/id" },
+    "projectId": { "$ref": "#/$defs/id" },
+    "framework": { "type": "string", "minLength": 1 },
+    "roots": { "type": "object", "additionalProperties": false, "required": ["workspace", "source"], "properties": { "workspace": { "$ref": "#/$defs/workspaceRootPath" }, "source": { "$ref": "#/$defs/relativePath" } } },
+    "files": { "type": "object", "additionalProperties": false, "required": ["scenarioRoot", "catalog"], "properties": { "scenarioRoot": { "$ref": "#/$defs/relativePath" }, "catalog": { "$ref": "#/$defs/relativePath" } } },
+    "candidateIdentity": { "$ref": "#/$defs/identityProvider" },
+    "serviceIdentity": { "$ref": "#/$defs/identityProvider" },
+    "destinations": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "serviceId", "scheme", "host", "port", "basePath", "environmentClass", "networkScope", "allowRedirects", "external", "production"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "serviceId": { "$ref": "#/$defs/id" },
+          "scheme": { "enum": ["http", "https"] }, "host": { "type": "string", "minLength": 1 },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "basePath": { "type": "string", "pattern": "^/" },
+          "environmentClass": { "enum": ["local", "test", "staging", "production"] },
+          "networkScope": { "enum": ["loopback", "container-internal", "private-network", "public-network"] },
+          "allowRedirects": { "const": false }, "external": { "type": "boolean" }, "production": { "type": "boolean" }
+        }
+      }
+    },
+    "contracts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "serviceId", "format", "manifest", "operationIndex", "traceability"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "serviceId": { "$ref": "#/$defs/id" }, "format": { "enum": ["openapi", "graphql", "grpc", "websocket", "custom"] },
+          "manifest": { "$ref": "#/$defs/fileRef" }, "operationIndex": { "$ref": "#/$defs/fileRef" },
+          "traceability": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fileRef" }] }
+        }
+      }
+    },
+    "runners": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "testTypes", "protocols", "capabilities", "argvTemplate", "cwd", "timeoutSeconds", "envKeys", "mutationClass"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "testTypes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/testType" } },
+          "protocols": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/protocol" } },
+          "capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "argvTemplate": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "cwd": { "$ref": "#/$defs/relativePath" }, "timeoutSeconds": { "type": "integer", "minimum": 1 },
+          "envKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/envKey" } },
+          "mutationClass": { "enum": ["NONE", "BUILD_OUTPUT", "TEST_OUTPUT", "AUTHORIZED_TEST_DATA"] }
+        }
+      }
+    },
+    "supportedProtocols": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/protocol" } },
+    "capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "evidenceRoot": { "$ref": "#/$defs/relativePath" },
+    "evidenceMode": { "enum": ["GENERIC_CANONICAL", "PROJECT_NATIVE_PARENT"] },
+    "secretEnvKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/envKey" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+" },
+    "workspaceRootPath": { "type": "string", "pattern": "^(?:\\.|\\.\\.(?:[/\\\\]\\.\\.){0,3})$" },
+    "envKey": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "protocol": { "enum": ["http", "graphql", "grpc", "websocket"] },
+    "testType": { "enum": ["static", "contract", "smoke", "negative", "authorization", "state", "idempotency", "integration", "performance"] },
+    "fileRef": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" } } },
+    "identityProvider": {
+      "type": "object", "additionalProperties": false, "required": ["method", "definitionRef", "command"],
+      "properties": { "method": { "enum": ["manifest-sha256", "git-diff-manifest-sha256", "project-command"] }, "definitionRef": { "$ref": "#/$defs/relativePath" }, "command": { "oneOf": [{ "type": "null" }, { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }] } }
+    }
+  }
+}

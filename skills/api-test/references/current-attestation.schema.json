@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/current-attestation.schema.json",
+  "title": "Current API Runtime Attestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "attestationId", "observedAt", "candidate", "destination", "service", "runtime", "contract", "authProfileFingerprint", "mutationStateHash"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "attestationId": { "$ref": "#/$defs/id" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "sourceHash", "diffHash", "buildId"],
+      "properties": { "revision": { "type": "string", "minLength": 1 }, "sourceHash": { "$ref": "#/$defs/hash" }, "diffHash": { "$ref": "#/$defs/hash" }, "buildId": { "type": "string", "minLength": 1 } }
+    },
+    "destination": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "serviceId", "fingerprint"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "serviceId": { "$ref": "#/$defs/id" }, "fingerprint": { "$ref": "#/$defs/hash" } }
+    },
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["serviceId", "identityHash"],
+      "properties": { "serviceId": { "$ref": "#/$defs/id" }, "identityHash": { "$ref": "#/$defs/hash" } }
+    },
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "imageRef", "imageId", "containerId", "containerImageId", "composeProject"],
+      "properties": {
+        "kind": { "enum": ["container", "process"] },
+        "imageRef": { "type": ["string", "null"] },
+        "imageId": { "type": ["string", "null"] },
+        "containerId": { "type": ["string", "null"] },
+        "containerImageId": { "type": ["string", "null"] },
+        "composeProject": { "type": ["string", "null"] }
+      }
+    },
+    "contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractId", "manifestHash", "combinedSha256", "operationIndexHash"],
+      "properties": { "contractId": { "$ref": "#/$defs/id" }, "manifestHash": { "$ref": "#/$defs/hash" }, "combinedSha256": { "$ref": "#/$defs/hash" }, "operationIndexHash": { "$ref": "#/$defs/hash" } }
+    },
+    "authProfileFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+    "mutationStateHash": { "$ref": "#/$defs/hash" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "runtime": { "properties": { "kind": { "const": "container" } } } }, "required": ["runtime"] },
+      "then": { "properties": { "runtime": { "properties": { "imageRef": { "type": "string", "minLength": 1 }, "imageId": { "type": "string", "minLength": 1 }, "containerId": { "type": "string", "minLength": 1 }, "containerImageId": { "type": "string", "minLength": 1 } } } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

@@ -7,6 +7,7 @@
 | Skill | 版本 | 用途 |
 | --- | --- | --- |
 | `wechat-miniprogram-test` | `3.2.0` | 有界执行微信小程序测试、验证修复，并生成哈希绑定的证据与唯一测试回执 |
+| `api-test` | `0.1.0-rc.2` | 通过项目 Adapter 有界执行 API 合同、运行时、权限和状态测试，并生成哈希绑定的标准回执或项目原生叶证据 |
 
 ## 仓库结构
 
@@ -14,6 +15,7 @@
 aw-skills/
 ├── manifest.json
 ├── skills/
+│   ├── api-test/
 │   └── wechat-miniprogram-test/
 ├── scripts/
 │   ├── Install-Skill.ps1
@@ -27,6 +29,7 @@ aw-skills/
 
 ```powershell
 pwsh ./scripts/Install-Skill.ps1 -Name wechat-miniprogram-test
+pwsh ./scripts/Install-Skill.ps1 -Name api-test
 ```
 
 安装器会先核对 `manifest.json` 中的内容摘要，且在目标目录已存在时拒绝覆盖。升级前请先审查版本差异，并自行备份或移除旧目录。

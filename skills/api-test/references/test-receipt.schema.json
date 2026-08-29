@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/test-receipt.schema.json",
+  "title": "Canonical API Test Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "receiptId", "issuedAt", "authority", "input", "subject", "run", "selection", "timing", "runtimeProfiles", "result", "scenarioResults", "findings", "blockers", "coverage", "mutations", "freshness", "producer"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "receiptId": { "$ref": "#/$defs/id" },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "authority": { "const": "TEST_EVIDENCE_ONLY" },
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requestPath", "requestSha256", "projectAdapterPath", "projectAdapterSha256", "catalogPath", "catalogSha256"],
+      "properties": { "requestPath": { "$ref": "#/$defs/relativePath" }, "requestSha256": { "$ref": "#/$defs/hash" }, "projectAdapterPath": { "$ref": "#/$defs/relativePath" }, "projectAdapterSha256": { "$ref": "#/$defs/hash" }, "catalogPath": { "$ref": "#/$defs/relativePath" }, "catalogSha256": { "$ref": "#/$defs/hash" } }
+    },
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["projectId", "candidateSourceHash", "revision", "buildId", "environment", "destinationId", "destinationFingerprint", "serviceId", "serviceIdentityHash", "contractId", "contractManifestHash", "contractCombinedSha256", "operationIndexHash", "authProfileFingerprint", "attestationHash"],
+      "properties": { "projectId": { "$ref": "#/$defs/id" }, "candidateSourceHash": { "$ref": "#/$defs/hash" }, "revision": { "type": "string", "minLength": 1 }, "buildId": { "type": "string", "minLength": 1 }, "environment": { "type": "string", "minLength": 1 }, "destinationId": { "$ref": "#/$defs/id" }, "destinationFingerprint": { "$ref": "#/$defs/hash" }, "serviceId": { "$ref": "#/$defs/id" }, "serviceIdentityHash": { "$ref": "#/$defs/hash" }, "contractId": { "$ref": "#/$defs/id" }, "contractManifestHash": { "$ref": "#/$defs/hash" }, "contractCombinedSha256": { "$ref": "#/$defs/hash" }, "operationIndexHash": { "$ref": "#/$defs/hash" }, "authProfileFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }, "attestationHash": { "$ref": "#/$defs/hash" } }
+    },
+    "run": { "type": "object", "additionalProperties": false, "required": ["mode", "outcome", "closure"], "properties": { "mode": { "enum": ["BASELINE", "TARGETED", "DEFECT_REPRODUCTION", "FIX_VERIFICATION", "REGRESSION"] }, "outcome": { "enum": ["NO_DEFECT", "DEFECT_FOUND", "DEFECT_REPRODUCED", "FIX_VERIFIED", "REGRESSION_FOUND", "BLOCKED"] }, "closure": { "enum": ["NOT_APPLICABLE", "OPEN", "PARTIAL", "CLOSED", "BLOCKED"] } } },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["strategy", "selectedScenarioIds", "executedScenarioIds", "excludedScenarioIds"],
+      "properties": { "strategy": { "enum": ["FULL", "IMPACT"] }, "selectedScenarioIds": { "$ref": "#/$defs/idArray" }, "executedScenarioIds": { "$ref": "#/$defs/idArray" }, "excludedScenarioIds": { "$ref": "#/$defs/idArray" } }
+    },
+    "timing": { "type": "object", "additionalProperties": false, "required": ["startedAt", "finishedAt", "durationMs"], "properties": { "startedAt": { "type": "string", "format": "date-time" }, "finishedAt": { "type": "string", "format": "date-time" }, "durationMs": { "type": "integer", "minimum": 0 } } },
+    "runtimeProfiles": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["scenarioId", "runnerId", "protocol", "serviceIdentityHash", "authProfileFingerprint"], "properties": { "scenarioId": { "$ref": "#/$defs/id" }, "runnerId": { "$ref": "#/$defs/id" }, "protocol": { "$ref": "#/$defs/protocol" }, "serviceIdentityHash": { "$ref": "#/$defs/hash" }, "authProfileFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] } } } },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["verdict", "requiredAssertionCount", "passedAssertionCount", "failedAssertionCount", "blockedAssertionCount", "advisoryNonPassCount", "reasonClass"],
+      "properties": { "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] }, "requiredAssertionCount": { "type": "integer", "minimum": 1 }, "passedAssertionCount": { "type": "integer", "minimum": 0 }, "failedAssertionCount": { "type": "integer", "minimum": 0 }, "blockedAssertionCount": { "type": "integer", "minimum": 0 }, "advisoryNonPassCount": { "type": "integer", "minimum": 0 }, "reasonClass": { "enum": ["none", "product-failure", "blocked"] } }
+    },
+    "scenarioResults": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["scenarioId", "scenarioHash", "evidencePath", "evidenceHash", "verdict", "requiredAssertionCount", "passedAssertionCount", "failedAssertionCount", "blockedAssertionCount", "artifactCount"], "properties": { "scenarioId": { "$ref": "#/$defs/id" }, "scenarioHash": { "$ref": "#/$defs/hash" }, "evidencePath": { "$ref": "#/$defs/relativePath" }, "evidenceHash": { "$ref": "#/$defs/hash" }, "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] }, "requiredAssertionCount": { "type": "integer", "minimum": 1 }, "passedAssertionCount": { "type": "integer", "minimum": 0 }, "failedAssertionCount": { "type": "integer", "minimum": 0 }, "blockedAssertionCount": { "type": "integer", "minimum": 0 }, "artifactCount": { "type": "integer", "minimum": 0 } } } },
+    "findings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["scenarioId", "assertionId", "classification", "fingerprint", "evidenceHash"], "properties": { "scenarioId": { "$ref": "#/$defs/id" }, "assertionId": { "$ref": "#/$defs/id" }, "classification": { "enum": ["PRODUCT_DEFECT", "ADVISORY"] }, "fingerprint": { "$ref": "#/$defs/hash" }, "evidenceHash": { "$ref": "#/$defs/hash" } } } },
+    "blockers": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["scenarioId", "code", "reason", "nextStep"], "properties": { "scenarioId": { "$ref": "#/$defs/id" }, "code": { "$ref": "#/$defs/id" }, "reason": { "type": "string", "minLength": 1 }, "nextStep": { "type": "string", "minLength": 1 } } } },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requiredImpactKeys", "coveredImpactKeys", "uncoveredImpactKeys", "targetOperations", "testedOperations", "untestedScenarioIds"],
+      "properties": { "requiredImpactKeys": { "$ref": "#/$defs/impactArray" }, "coveredImpactKeys": { "$ref": "#/$defs/impactArray" }, "uncoveredImpactKeys": { "$ref": "#/$defs/impactArray" }, "targetOperations": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "testedOperations": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "untestedScenarioIds": { "$ref": "#/$defs/idArray" } }
+    },
+    "mutations": { "type": "object", "additionalProperties": false, "required": ["count", "unresolvedCount", "summary"], "properties": { "count": { "type": "integer", "minimum": 0 }, "unresolvedCount": { "type": "integer", "minimum": 0 }, "summary": { "type": "array", "items": { "type": "string", "minLength": 1 } } } },
+    "freshness": { "type": "object", "additionalProperties": false, "required": ["class", "freshForSeconds", "expiresAt", "invalidationKeys"], "properties": { "class": { "enum": ["DETERMINISTIC", "RUNTIME_BOUND", "LIVE_MUTABLE", "MIXED"] }, "freshForSeconds": { "type": "integer", "minimum": 0 }, "expiresAt": { "type": ["string", "null"], "format": "date-time" }, "invalidationKeys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["candidate", "adapter", "catalog", "scenario", "environment", "service-runtime", "contract", "auth-profile", "artifact", "mutation-state", "time"] } } } },
+    "producer": { "type": "object", "additionalProperties": false, "required": ["skillName", "generatorIdentity", "validatorIdentity"], "properties": { "skillName": { "const": "api-test" }, "generatorIdentity": { "$ref": "#/$defs/hash" }, "validatorIdentity": { "$ref": "#/$defs/hash" } } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "PASS" } } } }, "required": ["result"] },
+      "then": { "properties": { "result": { "properties": { "failedAssertionCount": { "const": 0 }, "blockedAssertionCount": { "const": 0 }, "reasonClass": { "const": "none" } } }, "scenarioResults": { "items": { "properties": { "verdict": { "const": "PASS" } } } }, "blockers": { "maxItems": 0 }, "mutations": { "properties": { "unresolvedCount": { "const": 0 } } } } }
+    },
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "FAIL" } } } }, "required": ["result"] },
+      "then": { "properties": { "result": { "properties": { "failedAssertionCount": { "minimum": 1 }, "reasonClass": { "const": "product-failure" } } }, "findings": { "contains": { "properties": { "classification": { "const": "PRODUCT_DEFECT" } }, "required": ["classification"] } } } }
+    },
+    {
+      "if": { "properties": { "result": { "properties": { "verdict": { "const": "BLOCKED" } } } }, "required": ["result"] },
+      "then": { "properties": { "result": { "properties": { "reasonClass": { "const": "blocked" } } }, "blockers": { "minItems": 1 }, "run": { "properties": { "outcome": { "const": "BLOCKED" }, "closure": { "const": "BLOCKED" } } } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\]).+" },
+    "protocol": { "enum": ["http", "graphql", "grpc", "websocket"] },
+    "impactKey": { "type": "string", "pattern": "^(source|operation|schema|state|data|permission|config|contract|invariant|integration|runtime):.+$" },
+    "idArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+    "impactArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } }
+  }
+}

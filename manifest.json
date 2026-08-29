@@ -8,6 +8,13 @@
       "path": "skills/wechat-miniprogram-test",
       "entrypoint": "SKILL.md",
       "contentSha256": "d09adc10d85d4d911082c817e18cfc1522fe696ed76d7904d44957869f92303e"
+    },
+    {
+      "name": "api-test",
+      "version": "0.1.0-rc.2",
+      "path": "skills/api-test",
+      "entrypoint": "SKILL.md",
+      "contentSha256": "7ae242f941ec73f7ebaeb5315d5003cc82a035a399e519d0bfe424042267a6e9"
     }
   ]
 }

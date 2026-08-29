@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/traceability.schema.json",
+  "title": "API Business Operation Traceability",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contractId", "serviceId", "mappings"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "contractId": { "$ref": "#/$defs/id" },
+    "serviceId": { "$ref": "#/$defs/id" },
+    "mappings": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["businessOperationId", "apiOperationIds"],
+        "properties": { "businessOperationId": { "type": "string", "minLength": 1 }, "apiOperationIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } } }
+      }
+    }
+  },
+  "$defs": { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" } }
+}

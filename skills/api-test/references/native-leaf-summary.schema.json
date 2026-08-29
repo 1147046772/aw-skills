@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/native-leaf-summary.schema.json",
+  "title": "Project Native API Test Leaf Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "summaryId", "issuedAt", "authority", "request", "subject", "selection", "result", "evidence", "findings", "blockers", "mutations", "freshness", "producer"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "summaryId": { "$ref": "#/$defs/id" },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "authority": { "const": "TEST_LEAF_EVIDENCE_ONLY" },
+    "request": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "authorizationRef"], "properties": { "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" }, "authorizationRef": { "type": "string", "minLength": 1 } } },
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["projectId", "revision", "sourceHash", "diffHash", "buildId", "serviceId", "serviceIdentityHash", "destinationId", "destinationFingerprint", "contractId", "contractCombinedSha256", "operationIndexHash", "authProfileFingerprint", "attestationHash"],
+      "properties": {
+        "projectId": { "$ref": "#/$defs/id" }, "revision": { "type": "string", "minLength": 1 }, "sourceHash": { "$ref": "#/$defs/hash" }, "diffHash": { "$ref": "#/$defs/hash" }, "buildId": { "type": "string", "minLength": 1 }, "serviceId": { "$ref": "#/$defs/id" }, "serviceIdentityHash": { "$ref": "#/$defs/hash" }, "destinationId": { "$ref": "#/$defs/id" }, "destinationFingerprint": { "$ref": "#/$defs/hash" }, "contractId": { "$ref": "#/$defs/id" }, "contractCombinedSha256": { "$ref": "#/$defs/hash" }, "operationIndexHash": { "$ref": "#/$defs/hash" }, "authProfileFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }, "attestationHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "selection": { "type": "object", "additionalProperties": false, "required": ["selected", "executed", "excluded"], "properties": { "selected": { "$ref": "#/$defs/idArray" }, "executed": { "$ref": "#/$defs/idArray" }, "excluded": { "$ref": "#/$defs/idArray" } } },
+    "result": { "type": "object", "additionalProperties": false, "required": ["verdict", "requiredAssertions", "passedAssertions", "failedAssertions", "blockedAssertions"], "properties": { "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] }, "requiredAssertions": { "type": "integer", "minimum": 1 }, "passedAssertions": { "type": "integer", "minimum": 0 }, "failedAssertions": { "type": "integer", "minimum": 0 }, "blockedAssertions": { "type": "integer", "minimum": 0 } } },
+    "evidence": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["scenarioId", "path", "sha256", "verdict"], "properties": { "scenarioId": { "$ref": "#/$defs/id" }, "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" }, "verdict": { "enum": ["PASS", "FAIL", "BLOCKED"] } } } },
+    "findings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "mutations": { "type": "object", "additionalProperties": false, "required": ["count", "unresolvedCount"], "properties": { "count": { "type": "integer", "minimum": 0 }, "unresolvedCount": { "type": "integer", "minimum": 0 } } },
+    "freshness": { "type": "object", "additionalProperties": false, "required": ["attestedAt", "attestationHash", "currentIdentityRequired"], "properties": { "attestedAt": { "type": "string", "format": "date-time" }, "attestationHash": { "$ref": "#/$defs/hash" }, "currentIdentityRequired": { "const": true } } },
+    "producer": { "type": "object", "additionalProperties": false, "required": ["skillName", "generatorIdentity", "validatorIdentity"], "properties": { "skillName": { "const": "api-test" }, "generatorIdentity": { "$ref": "#/$defs/hash" }, "validatorIdentity": { "$ref": "#/$defs/hash" } } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+" },
+    "idArray": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+  }
+}

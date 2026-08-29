@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/test-request.schema.json",
+  "title": "Canonical API Test Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "runId", "requestedAt", "authorizationRef", "projectAdapter", "currentAttestation", "candidate", "environment", "run", "testPlan", "authorization", "execution", "output"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "requestId": { "$ref": "#/$defs/id" }, "runId": { "$ref": "#/$defs/id" },
+    "requestedAt": { "type": "string", "format": "date-time" }, "authorizationRef": { "type": "string", "minLength": 1 },
+    "projectAdapter": { "$ref": "#/$defs/versionedFileRef" },
+    "currentAttestation": { "$ref": "#/$defs/fileRef" },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "sourceHash", "diffHash", "buildId"],
+      "properties": { "revision": { "type": "string", "minLength": 1 }, "sourceHash": { "$ref": "#/$defs/hash" }, "diffHash": { "$ref": "#/$defs/hash" }, "buildId": { "type": "string", "minLength": 1 } }
+    },
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "class", "destinationId", "destinationFingerprint", "serviceId", "serviceIdentityHash", "contractId", "contractManifestHash", "contractCombinedSha256", "operationIndexHash", "authProfileFingerprint"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 }, "class": { "enum": ["local", "test", "staging", "production"] },
+        "destinationId": { "$ref": "#/$defs/id" }, "destinationFingerprint": { "$ref": "#/$defs/hash" },
+        "serviceId": { "$ref": "#/$defs/id" }, "serviceIdentityHash": { "$ref": "#/$defs/hash" },
+        "contractId": { "$ref": "#/$defs/id" }, "contractManifestHash": { "$ref": "#/$defs/hash" },
+        "contractCombinedSha256": { "$ref": "#/$defs/hash" }, "operationIndexHash": { "$ref": "#/$defs/hash" },
+        "authProfileFingerprint": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }
+      }
+    },
+    "run": {
+      "type": "object", "additionalProperties": false, "required": ["mode", "parentReceipt"],
+      "properties": {
+        "mode": { "enum": ["BASELINE", "TARGETED", "DEFECT_REPRODUCTION", "FIX_VERIFICATION", "REGRESSION"] },
+        "parentReceipt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/fileRef" }] }
+      }
+    },
+    "testPlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["catalog", "strategy", "changedImpactKeys", "upstreamDepth", "downstreamDepth", "fullSuiteTriggers", "selectedScenarioIds"],
+      "properties": {
+        "catalog": { "$ref": "#/$defs/catalogRef" },
+        "strategy": { "enum": ["FULL", "IMPACT"] },
+        "changedImpactKeys": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+        "upstreamDepth": { "type": "integer", "minimum": 0, "maximum": 2 }, "downstreamDepth": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "fullSuiteTriggers": { "type": "array", "uniqueItems": true, "items": { "enum": ["impact-unknown", "catalog-stale", "shared-foundation-change", "test-infrastructure-change", "multi-domain-change", "unexpected-outside-impact-failure", "release-baseline", "policy-required"] } },
+        "selectedScenarioIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["businessWrite", "testDataMutation", "externalCall", "productionAccess", "accountOrCredentialChange"],
+      "properties": { "businessWrite": { "type": "boolean" }, "testDataMutation": { "type": "boolean" }, "externalCall": { "type": "boolean" }, "productionAccess": { "type": "boolean" }, "accountOrCredentialChange": { "type": "boolean" } }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["totalBudgetSeconds", "maxParallelScenarios", "isolatedRuntimePerScenario", "readRetryLimit", "writeRetryLimit"],
+      "properties": { "totalBudgetSeconds": { "type": "integer", "minimum": 1 }, "maxParallelScenarios": { "type": "integer", "minimum": 1, "maximum": 4 }, "isolatedRuntimePerScenario": { "type": "boolean" }, "readRetryLimit": { "type": "integer", "minimum": 0, "maximum": 2 }, "writeRetryLimit": { "const": 0 } }
+    },
+    "output": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root", "evidenceFileName", "receiptFileName", "leafSummaryFileName", "overwrite"],
+      "properties": { "root": { "$ref": "#/$defs/relativePath" }, "evidenceFileName": { "const": "evidence.json" }, "receiptFileName": { "const": "test-receipt.json" }, "leafSummaryFileName": { "const": "api-test-leaf-summary.json" }, "overwrite": { "const": false } }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "run": { "properties": { "mode": { "const": "BASELINE" } } } }, "required": ["run"] }, "then": { "properties": { "testPlan": { "properties": { "strategy": { "const": "FULL" } } } } } },
+    { "if": { "properties": { "run": { "properties": { "mode": { "const": "TARGETED" } } } }, "required": ["run"] }, "then": { "properties": { "testPlan": { "properties": { "strategy": { "const": "IMPACT" }, "changedImpactKeys": { "minItems": 1 } } } } } },
+    { "if": { "properties": { "run": { "properties": { "mode": { "const": "DEFECT_REPRODUCTION" } } } }, "required": ["run"] }, "then": { "properties": { "testPlan": { "properties": { "strategy": { "const": "IMPACT" }, "upstreamDepth": { "const": 0 }, "downstreamDepth": { "const": 0 } } } } } },
+    { "if": { "properties": { "run": { "properties": { "mode": { "const": "FIX_VERIFICATION" } } } }, "required": ["run"] }, "then": { "properties": { "run": { "properties": { "parentReceipt": { "type": "object" } } }, "testPlan": { "properties": { "strategy": { "const": "IMPACT" }, "upstreamDepth": { "minimum": 1 }, "downstreamDepth": { "minimum": 1 } } } } } },
+    { "if": { "properties": { "environment": { "properties": { "class": { "const": "production" } } } }, "required": ["environment"] }, "then": { "properties": { "authorization": { "properties": { "productionAccess": { "const": true } } } } } }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+" },
+    "impactKey": { "type": "string", "pattern": "^(source|operation|schema|state|data|permission|config|contract|invariant|integration|runtime):.+$" },
+    "fileRef": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" } } },
+    "versionedFileRef": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "adapterId", "adapterVersion"], "properties": { "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" }, "adapterId": { "$ref": "#/$defs/id" }, "adapterVersion": { "type": "string", "minLength": 1 } } },
+    "catalogRef": { "type": "object", "additionalProperties": false, "required": ["path", "sha256", "catalogId", "catalogVersion"], "properties": { "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" }, "catalogId": { "$ref": "#/$defs/id" }, "catalogVersion": { "type": "string", "minLength": 1 } } }
+  }
+}

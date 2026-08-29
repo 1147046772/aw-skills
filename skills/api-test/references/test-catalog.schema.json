@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/test-catalog.schema.json",
+  "title": "API Test Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogId", "catalogVersion", "coveragePolicy", "scenarios", "relations"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "catalogId": { "$ref": "#/$defs/id" },
+    "catalogVersion": { "type": "string", "minLength": 1 },
+    "coveragePolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "activeOperationIds"],
+      "properties": {
+        "mode": { "enum": ["DECLARED_ACTIVE", "ALL_CONTRACT_OPERATIONS"] },
+        "activeOperationIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "scenarios": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "path", "sha256"],
+        "properties": { "id": { "$ref": "#/$defs/id" }, "path": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" } }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["from", "to", "impactKeys"],
+        "properties": { "from": { "$ref": "#/$defs/id" }, "to": { "$ref": "#/$defs/id" }, "impactKeys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } } }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+" },
+    "impactKey": { "type": "string", "pattern": "^(source|operation|schema|state|data|permission|config|contract|invariant|integration|runtime):.+$" }
+  }
+}

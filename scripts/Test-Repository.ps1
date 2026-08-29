@@ -54,7 +54,7 @@ foreach ($skill in $manifest.skills) {
     if (-not $names.Add([string]$skill.name)) {
         throw "Duplicate skill name: $($skill.name)"
     }
-    if ($skill.version -notmatch '^\d+\.\d+\.\d+$') {
+    if ($skill.version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$') {
         throw "Invalid semantic version for $($skill.name): $($skill.version)"
     }
 

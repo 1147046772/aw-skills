@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.local/api-test/scenario.schema.json",
+  "title": "API Test Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "scenarioVersion", "id", "title", "priority", "tags", "testType", "impact", "protocol", "operations", "authentication", "runtime", "preconditions", "fixture", "permissions", "writePolicy", "steps", "assertions", "evidencePolicy", "stopConditions", "timeBudgetSeconds"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "scenarioVersion": { "type": "string", "minLength": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "type": "string", "minLength": 1 },
+    "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+    "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "testType": { "$ref": "#/$defs/testType" },
+    "impact": {
+      "type": "object", "additionalProperties": false, "required": ["keys", "risk"],
+      "properties": {
+        "keys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+        "risk": { "enum": ["local", "shared", "external", "production"] }
+      }
+    },
+    "protocol": { "$ref": "#/$defs/protocol" },
+    "operations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/operation" } },
+    "authentication": {
+      "type": "object", "additionalProperties": false, "required": ["mode", "profileRef", "requiredScopes"],
+      "properties": {
+        "mode": { "enum": ["none", "required"] },
+        "profileRef": { "type": ["string", "null"] },
+        "requiredScopes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "runtime": {
+      "type": "object", "additionalProperties": false, "required": ["runnerId", "capabilities"],
+      "properties": {
+        "runnerId": { "$ref": "#/$defs/id" },
+        "capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "required", "kind", "expected"],
+        "properties": { "id": { "$ref": "#/$defs/id" }, "required": { "type": "boolean" }, "kind": { "enum": ["candidate", "environment", "service", "contract", "authentication", "fixture", "runtime", "permission"] }, "expected": {} }
+      }
+    },
+    "fixture": {
+      "type": "object", "additionalProperties": false, "required": ["mode", "reference", "ownsData"],
+      "properties": {
+        "mode": { "enum": ["none", "existing-authorized", "project-fixture"] },
+        "reference": { "type": ["string", "null"] },
+        "ownsData": { "type": "boolean" }
+      }
+    },
+    "permissions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["businessWrite", "testDataMutation", "externalCall", "productionAccess", "accountOrCredentialChange"],
+      "properties": {
+        "businessWrite": { "type": "boolean" }, "testDataMutation": { "type": "boolean" }, "externalCall": { "type": "boolean" }, "productionAccess": { "type": "boolean" }, "accountOrCredentialChange": { "type": "boolean" }
+      }
+    },
+    "writePolicy": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["maxAttempts", "automaticRetry", "idempotencyStrategy", "compensation"],
+          "properties": {
+            "maxAttempts": { "const": 1 },
+            "automaticRetry": { "const": false },
+            "idempotencyStrategy": { "enum": ["protocol-key", "conditional-version", "fixture-unique-key", "operation-readback", "not-supported-stop-on-unknown"] },
+            "compensation": { "enum": ["restore", "compensate", "persist-authorized", "none-stop-unresolved"] }
+          }
+        }
+      ]
+    },
+    "steps": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "action", "operationId", "mutationClass", "expectedObservation"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "action": { "enum": ["request", "poll", "assert", "prepare-fixture", "cleanup-fixture"] },
+          "operationId": { "type": ["string", "null"] },
+          "mutationClass": { "enum": ["none", "business-write", "test-data", "external-call", "account-or-credential"] },
+          "expectedObservation": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array", "minItems": 1,
+      "contains": { "type": "object", "properties": { "severity": { "const": "REQUIRED" } }, "required": ["severity"] },
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "operator", "expected", "sourceOfTruth", "severity", "impactKeys", "evidenceTypes"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "kind": { "enum": ["status", "schema", "header", "body", "authorization", "business", "state", "side-effect", "idempotency", "concurrency", "timing", "invariant", "artifact"] },
+          "operator": { "enum": ["equals", "not-equals", "contains", "matches", "exists", "not-exists", "truthy", "falsy", "gt", "gte", "lt", "lte"] },
+          "expected": {},
+          "sourceOfTruth": { "enum": ["protocol", "contract", "response", "readback", "database-fixture", "provider-receipt", "artifact"] },
+          "severity": { "enum": ["REQUIRED", "ADVISORY"] },
+          "impactKeys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/impactKey" } },
+          "evidenceTypes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["request-metadata", "response-metadata", "redacted-body", "body-hash", "contract-result", "readback", "provider-receipt", "process-output", "report"] } }
+        }
+      }
+    },
+    "evidencePolicy": {
+      "type": "object", "additionalProperties": false, "required": ["bodyCapture", "redactHeaders", "redactJsonPaths", "artifacts"],
+      "properties": {
+        "bodyCapture": { "enum": ["none", "hash", "redacted-fields"] },
+        "redactHeaders": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "redactJsonPaths": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "artifacts": { "type": "array", "uniqueItems": true, "items": { "enum": ["request-log", "response-log", "contract-report", "runner-report", "trace", "other"] } }
+      }
+    },
+    "stopConditions": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "condition", "classification", "detail"],
+        "properties": { "id": { "$ref": "#/$defs/id" }, "condition": { "type": "string", "minLength": 1 }, "classification": { "enum": ["FAIL", "BLOCKED", "STOP"] }, "detail": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "timeBudgetSeconds": { "type": "integer", "minimum": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "permissions": { "properties": { "businessWrite": { "const": true } }, "required": ["businessWrite"] } }, "required": ["permissions"] },
+      "then": { "properties": { "fixture": { "properties": { "mode": { "not": { "const": "none" } }, "ownsData": { "const": true } } }, "writePolicy": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "permissions": { "properties": { "testDataMutation": { "const": true } }, "required": ["testDataMutation"] } }, "required": ["permissions"] },
+      "then": { "properties": { "fixture": { "properties": { "mode": { "const": "project-fixture" }, "ownsData": { "const": true } } }, "writePolicy": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "permissions": { "properties": { "externalCall": { "const": true } }, "required": ["externalCall"] } }, "required": ["permissions"] },
+      "then": { "properties": { "writePolicy": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "authentication": { "properties": { "mode": { "const": "none" } }, "required": ["mode"] } }, "required": ["authentication"] },
+      "then": { "properties": { "authentication": { "properties": { "profileRef": { "type": "null" }, "requiredScopes": { "maxItems": 0 } } } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "protocol": { "enum": ["http", "graphql", "grpc", "websocket"] },
+    "testType": { "enum": ["static", "contract", "smoke", "negative", "authorization", "state", "idempotency", "integration", "performance"] },
+    "impactKey": { "type": "string", "pattern": "^(source|operation|schema|state|data|permission|config|contract|invariant|integration|runtime):.+$" },
+    "operation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "contractId", "serviceId", "method", "pathOrOperation"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "contractId": { "$ref": "#/$defs/id" },
+        "serviceId": { "$ref": "#/$defs/id" },
+        "method": { "enum": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE", "QUERY", "MUTATION", "CALL", "CONNECT", "MESSAGE"] },
+        "pathOrOperation": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
