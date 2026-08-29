@@ -5,6 +5,12 @@ param()
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $manifestPath = Join-Path $repoRoot 'manifest.json'
+$pathComparison = if ($IsWindows) {
+    [System.StringComparison]::OrdinalIgnoreCase
+}
+else {
+    [System.StringComparison]::Ordinal
+}
 
 function Get-SkillContentHash {
     param([Parameter(Mandatory)][string]$Root)
@@ -60,7 +66,7 @@ foreach ($skill in $manifest.skills) {
 
     $skillRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot ([string]$skill.path)))
     $repoPrefix = $repoRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    if (-not $skillRoot.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $skillRoot.StartsWith($repoPrefix, $pathComparison)) {
         throw "Skill path escapes the repository: $($skill.path)"
     }
     if (-not (Test-Path -LiteralPath $skillRoot -PathType Container)) {
@@ -68,7 +74,7 @@ foreach ($skill in $manifest.skills) {
     }
 
     $entrypoint = [System.IO.Path]::GetFullPath((Join-Path $skillRoot ([string]$skill.entrypoint)))
-    if (-not $entrypoint.StartsWith($skillRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or
+    if (-not $entrypoint.StartsWith($skillRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar, $pathComparison) -or
         -not (Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
         throw "Skill entrypoint is invalid: $($skill.entrypoint)"
     }
@@ -109,7 +115,7 @@ foreach ($skill in $manifest.skills) {
         throw "Content hash mismatch for '$($skill.name)'. Expected $($skill.contentSha256), got $actualHash."
     }
 
-    $contractTest = Join-Path $skillRoot 'scripts\test-contract.ps1'
+    $contractTest = Join-Path (Join-Path $skillRoot 'scripts') 'test-contract.ps1'
     if (Test-Path -LiteralPath $contractTest -PathType Leaf) {
         $pwshPath = (Get-Process -Id $PID).Path
         & $pwshPath -NoProfile -File $contractTest | Out-Host

@@ -21,15 +21,13 @@ project-root/
     test-request.json
 ```
 
-`.api-test/` 可版本化；`.local/evidence/` 应排除版本控制。所有路径相对 workspace，输出目录必须是唯一且禁止覆盖的请求子目录。
-
-Adapter 位于 `project-root/.api-test/project.json` 时，`roots.workspace` 使用 `..`；位于多仓工作区中某个产品仓的 `.api-test/` 时，可使用 `../..` 指向共同工作区根。该字段只允许 `.` 或一至四级纯祖先路径，不能混入目录名、绝对路径或指向文件系统根。Request 输出还必须位于 Adapter 声明的 `evidenceRoot` 内。
+`.api-test/` 可版本化；`.local/evidence/` 应排除版本控制。Adapter 可位于 workspace 内部目录，`roots.workspace` 只允许 `.` 或最多四层明确父目录，解析后必须是包含 Adapter 的物理工作区。其余所有路径相对 workspace；`evidenceRoot` 是证据监狱，Request 输出目录必须在其内且是唯一、禁止覆盖的 run 子目录。
 
 接入顺序：
 
 1. 只读检查项目治理、现有 runner、API 契约、环境身份方式和最终测试摘要所有权。
 2. 建立 Adapter 的精确 `destinations[]` 和 `contracts[]`，不写真实密钥、机器绝对路径或业务预期。
-3. 建立确定性 Contract Manifest、Operation Index、完整 Catalog 和至少一个只读 Scenario；绑定精确文件哈希。
+3. OpenAPI 3.0/3.1 JSON 使用 `scripts/new-openapi-contract.ps1` 一次生成确定性 Contract Manifest 和 Operation Index；YAML 在未声明锁定解析器前必须 `BLOCKED`。再建立完整 Catalog 和至少一个只读 Scenario，绑定精确文件哈希。
 4. 运行 `scripts/test-contract.ps1` 验证 Skill 自身。
 5. 验证项目 PASS、FAIL、BLOCKED 三类 child evidence。
 6. 启动实际目标后采集 Current Attestation，再生成最终 Request；运行后重新采集并使用 `-RequireCurrentIdentity` 比对。

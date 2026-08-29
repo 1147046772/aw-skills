@@ -1,6 +1,8 @@
 ---
 name: api-test
 description: Execute bounded API contract, runtime, authorization, state, idempotency, and integration tests through project-declared runners, and emit hash-bound scenario evidence plus one canonical test receipt. It does not authorize source changes, undeclared data mutation, production access, external-provider calls, release, or deployment.
+metadata:
+  version: "0.2.0-rc.2"
 ---
 
 # API Test
@@ -8,6 +10,8 @@ description: Execute bounded API contract, runtime, authorization, state, idempo
 Execute the smallest sufficient API test boundary through project-owned runners and produce independently verifiable evidence.
 
 Canonical input consists of one project adapter, deterministic contract manifest and operation index, one complete test catalog, hash-bound scenarios, one current runtime attestation, and one `test-request.json`. Output consists of one `evidence.json` for each attempted scenario plus either a generic `test-receipt.json` or a project-native `api-test-leaf-summary.json`. Project routes, roles, fixtures, credentials, environment discovery, runners, and business expectations belong in project inputs, not in this Skill.
+
+The `0.2` stable capability is HTTP with OpenAPI 3.0/3.1 JSON, plus explicitly enumerated `custom` contracts with weaker project-owned truth. YAML without a pinned project parser and GraphQL, gRPC, or WebSocket contract formats are `BLOCKED_UNSUPPORTED`; they must not inherit the OpenAPI assurance claim.
 
 ## Hard rules
 
@@ -34,7 +38,7 @@ Read [incremental-regression-contract.md](references/incremental-regression-cont
 
 ## Execute
 
-1. **Freeze the API contract** — Generate or project-produce a complete local-reference manifest. [new-contract-manifest.ps1](scripts/new-contract-manifest.ps1) hashes the declared root and transitive files; the project also provides a hash-bound operation index whose method, path, effect, external-call flag, and traceability are derived from the API contract.
+1. **Freeze the API contract** — For the stable OpenAPI path, run [new-openapi-contract.ps1](scripts/new-openapi-contract.ps1) against an OpenAPI 3.0/3.1 JSON root. It recursively rejects external or escaping references and produces both the exact-file manifest and Operation index from contract truth. YAML is `BLOCKED` until a project declares a pinned parser. [new-contract-manifest.ps1](scripts/new-contract-manifest.ps1) is only for an explicitly enumerated `custom` contract; it cannot claim OpenAPI reference closure.
 2. **Attest the running target** — After the service starts, collect candidate, destination, service/process or image/container, contract/index, auth-profile, and mutation-state facts into `current-attestation.json`. Only then generate the final Request.
 3. **Freeze input** — Run [validate-contract.ps1](scripts/validate-contract.ps1) with the Adapter and Request. It cross-checks the destination fingerprint, contract bytes, Operation index, catalog coverage, Scenario steps, mutation permissions, selection boundary, and initial attestation.
 4. **Run selected scenarios** — Execute the declared direct-process runner without shell substitution. A request or poll step may reference only an indexed Operation. The validator derives READ/WRITE from the Operation; a Scenario cannot make a POST safe by labeling it `none`.
